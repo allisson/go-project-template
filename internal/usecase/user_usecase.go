@@ -8,7 +8,6 @@ import (
 
 	"github.com/allisson/go-project-template/internal/database"
 	"github.com/allisson/go-project-template/internal/domain"
-	"github.com/allisson/go-project-template/internal/repository"
 	"github.com/allisson/go-pwdhash"
 )
 
@@ -19,19 +18,33 @@ type RegisterUserInput struct {
 	Password string `json:"password"`
 }
 
+// UserRepository interface defines user repository operations
+type UserRepository interface {
+	Create(ctx context.Context, user *domain.User) error
+	GetByID(ctx context.Context, id int64) (*domain.User, error)
+	GetByEmail(ctx context.Context, email string) (*domain.User, error)
+}
+
+// OutboxEventRepository interface defines outbox event repository operations
+type OutboxEventRepository interface {
+	Create(ctx context.Context, event *domain.OutboxEvent) error
+	GetPendingEvents(ctx context.Context, limit int) ([]*domain.OutboxEvent, error)
+	Update(ctx context.Context, event *domain.OutboxEvent) error
+}
+
 // UserUseCase handles user-related business logic
 type UserUseCase struct {
 	txManager      database.TxManager
-	userRepo       *repository.UserRepository
-	outboxRepo     *repository.OutboxEventRepository
+	userRepo       UserRepository
+	outboxRepo     OutboxEventRepository
 	passwordHasher *pwdhash.PasswordHasher
 }
 
 // NewUserUseCase creates a new UserUseCase
 func NewUserUseCase(
 	txManager database.TxManager,
-	userRepo *repository.UserRepository,
-	outboxRepo *repository.OutboxEventRepository,
+	userRepo UserRepository,
+	outboxRepo OutboxEventRepository,
 ) (*UserUseCase, error) {
 	// Initialize password hasher with interactive policy for user passwords
 	hasher, err := pwdhash.New(pwdhash.WithPolicy(pwdhash.PolicyInteractive))

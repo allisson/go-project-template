@@ -9,7 +9,6 @@ import (
 
 	"github.com/allisson/go-project-template/internal/database"
 	"github.com/allisson/go-project-template/internal/domain"
-	"github.com/allisson/go-project-template/internal/repository"
 )
 
 // Config holds worker configuration
@@ -20,11 +19,18 @@ type Config struct {
 	RetryInterval time.Duration
 }
 
+// OutboxEventRepository interface defines outbox event repository operations
+type OutboxEventRepository interface {
+	Create(ctx context.Context, event *domain.OutboxEvent) error
+	GetPendingEvents(ctx context.Context, limit int) ([]*domain.OutboxEvent, error)
+	Update(ctx context.Context, event *domain.OutboxEvent) error
+}
+
 // EventWorker processes outbox events
 type EventWorker struct {
 	config     Config
 	txManager  database.TxManager
-	outboxRepo *repository.OutboxEventRepository
+	outboxRepo OutboxEventRepository
 	logger     *slog.Logger
 }
 
@@ -32,7 +38,7 @@ type EventWorker struct {
 func NewEventWorker(
 	config Config,
 	txManager database.TxManager,
-	outboxRepo *repository.OutboxEventRepository,
+	outboxRepo OutboxEventRepository,
 	logger *slog.Logger,
 ) *EventWorker {
 	return &EventWorker{
@@ -45,10 +51,12 @@ func NewEventWorker(
 
 // Start starts the worker
 func (w *EventWorker) Start(ctx context.Context) error {
-	w.logger.Info("starting event worker",
-		slog.Duration("interval", w.config.Interval),
-		slog.Int("batch_size", w.config.BatchSize),
-	)
+	if w.logger != nil {
+		w.logger.Info("starting event worker",
+			slog.Duration("interval", w.config.Interval),
+			slog.Int("batch_size", w.config.BatchSize),
+		)
+	}
 
 	ticker := time.NewTicker(w.config.Interval)
 	defer ticker.Stop()
@@ -56,11 +64,15 @@ func (w *EventWorker) Start(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			w.logger.Info("stopping event worker")
+			if w.logger != nil {
+				w.logger.Info("stopping event worker")
+			}
 			return ctx.Err()
 		case <-ticker.C:
 			if err := w.processEvents(ctx); err != nil {
-				w.logger.Error("failed to process events", slog.Any("error", err))
+				if w.logger != nil {
+					w.logger.Error("failed to process events", slog.Any("error", err))
+				}
 			}
 		}
 	}
@@ -79,15 +91,19 @@ func (w *EventWorker) processEvents(ctx context.Context) error {
 			return nil
 		}
 
-		w.logger.Info("processing events", slog.Int("count", len(events)))
+		if w.logger != nil {
+			w.logger.Info("processing events", slog.Int("count", len(events)))
+		}
 
 		for _, event := range events {
 			if err := w.processEvent(ctx, event); err != nil {
-				w.logger.Error("failed to process event",
-					slog.Int64("event_id", event.ID),
-					slog.String("event_type", event.EventType),
-					slog.Any("error", err),
-				)
+				if w.logger != nil {
+					w.logger.Error("failed to process event",
+						slog.Int64("event_id", event.ID),
+						slog.String("event_type", event.EventType),
+						slog.Any("error", err),
+					)
+				}
 
 				// Update event as failed
 				event.Retries++
@@ -120,10 +136,12 @@ func (w *EventWorker) processEvents(ctx context.Context) error {
 
 // processEvent handles a single outbox event and implements the event processing logic.
 func (w *EventWorker) processEvent(ctx context.Context, event *domain.OutboxEvent) error {
-	w.logger.Info("processing event",
-		slog.Int64("event_id", event.ID),
-		slog.String("event_type", event.EventType),
-	)
+	if w.logger != nil {
+		w.logger.Info("processing event",
+			slog.Int64("event_id", event.ID),
+			slog.String("event_type", event.EventType),
+		)
+	}
 
 	// Parse event payload
 	var payload map[string]interface{}
@@ -134,13 +152,17 @@ func (w *EventWorker) processEvent(ctx context.Context, event *domain.OutboxEven
 	// Handle different event types
 	switch event.EventType {
 	case "user.created":
-		w.logger.Info("user created event",
-			slog.Any("payload", payload),
-		)
+		if w.logger != nil {
+			w.logger.Info("user created event",
+				slog.Any("payload", payload),
+			)
+		}
 		// In a real application, you might publish this to a message queue,
 		// send notifications, update cache, etc.
 	default:
-		w.logger.Warn("unknown event type", slog.String("event_type", event.EventType))
+		if w.logger != nil {
+			w.logger.Warn("unknown event type", slog.String("event_type", event.EventType))
+		}
 	}
 
 	return nil
