@@ -36,7 +36,7 @@ type Container struct {
 	outboxRepo *outboxRepository.OutboxEventRepository
 
 	// Use Cases
-	userUseCase *userUsecase.UserUseCase
+	userUseCase userUsecase.UseCase
 
 	// Servers and Workers
 	httpServer  *http.Server
@@ -152,7 +152,7 @@ func (c *Container) OutboxRepository() (*outboxRepository.OutboxEventRepository,
 }
 
 // UserUseCase returns the user use case instance.
-func (c *Container) UserUseCase() (*userUsecase.UserUseCase, error) {
+func (c *Container) UserUseCase() (userUsecase.UseCase, error) {
 	var err error
 	c.userUseCaseInit.Do(func() {
 		c.userUseCase, err = c.initUserUseCase()
@@ -301,7 +301,7 @@ func (c *Container) initOutboxRepository() (*outboxRepository.OutboxEventReposit
 }
 
 // initUserUseCase creates the user use case with all its dependencies.
-func (c *Container) initUserUseCase() (*userUsecase.UserUseCase, error) {
+func (c *Container) initUserUseCase() (userUsecase.UseCase, error) {
 	txManager, err := c.TxManager()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tx manager for user use case: %w", err)
