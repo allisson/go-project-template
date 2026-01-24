@@ -18,6 +18,7 @@ A production-ready Go project template following Clean Architecture and Domain-D
 - **Health Checks** - Kubernetes-compatible readiness and liveness endpoints
 - **Structured Logging** - JSON logs using slog
 - **Configuration** - Environment variable based configuration with go-env
+- **Input Validation** - Advanced validation with jellydator/validation library including password strength, email format, and custom rules
 - **Password Hashing** - Secure password hashing with Argon2id via go-pwdhash
 - **Docker Support** - Multi-stage Dockerfile for minimal container size
 - **CI/CD** - GitHub Actions workflow for linting and testing
@@ -66,6 +67,9 @@ go-project-template/
 │   │   │   └── user_repository.go
 │   │   └── usecase/            # User business logic
 │   │       └── user_usecase.go
+│   ├── validation/             # Custom validation rules
+│   │   ├── rules.go
+│   │   └── rules_test.go
 │   └── worker/                 # Background workers
 │       └── event_worker.go
 ├── migrations/
@@ -257,8 +261,26 @@ curl -X POST http://localhost:8080/api/users \
   -d '{
     "name": "John Doe",
     "email": "john@example.com",
-    "password": "securepassword123"
+    "password": "SecurePass123!"
   }'
+```
+
+**Password Requirements:**
+- Minimum 8 characters
+- At least one uppercase letter
+- At least one lowercase letter
+- At least one number
+- At least one special character
+
+**Validation Errors:**
+
+If validation fails, you'll receive a 422 Unprocessable Entity response with details:
+
+```json
+{
+  "error": "invalid_input",
+  "message": "email: must be a valid email address; password: password must contain at least one uppercase letter."
+}
 ```
 
 ### CLI Commands
@@ -737,6 +759,91 @@ func ToUserResponse(user *domain.User) UserResponse {
 4. **Versioning** - Easy to maintain multiple API versions with different DTOs
 5. **Validation** - Request validation happens at the DTO level before reaching domain logic
 
+### Input Validation
+
+The project uses the [jellydator/validation](https://github.com/jellydator/validation) library for comprehensive input validation at both the DTO and use case layers.
+
+**Custom Validation Rules** (`internal/validation/rules.go`)
+
+The project provides reusable validation rules:
+
+```go
+// Password strength validation
+PasswordStrength{
+    MinLength:      8,
+    RequireUpper:   true,
+    RequireLower:   true,
+    RequireNumber:  true,
+    RequireSpecial: true,
+}
+
+// Email format validation
+Email
+
+// No leading/trailing whitespace
+NoWhitespace
+
+// Not blank after trimming
+NotBlank
+```
+
+**DTO Validation Example:**
+
+```go
+func (r *RegisterUserRequest) Validate() error {
+    err := validation.ValidateStruct(r,
+        validation.Field(&r.Name,
+            validation.Required.Error("name is required"),
+            appValidation.NotBlank,
+            validation.Length(1, 255).Error("name must be between 1 and 255 characters"),
+        ),
+        validation.Field(&r.Email,
+            validation.Required.Error("email is required"),
+            appValidation.NotBlank,
+            appValidation.Email,
+            validation.Length(5, 255).Error("email must be between 5 and 255 characters"),
+        ),
+        validation.Field(&r.Password,
+            validation.Required.Error("password is required"),
+            validation.Length(8, 128).Error("password must be between 8 and 128 characters"),
+            appValidation.PasswordStrength{
+                MinLength:      8,
+                RequireUpper:   true,
+                RequireLower:   true,
+                RequireNumber:  true,
+                RequireSpecial: true,
+            },
+        ),
+    )
+    return appValidation.WrapValidationError(err)
+}
+```
+
+**Validation Layers:**
+
+1. **DTO Layer** - Validates API request structure and basic constraints
+2. **Use Case Layer** - Validates business logic rules and constraints
+3. **Domain Layer** - Defines domain-specific error types
+
+**Error Responses:**
+
+Validation errors are automatically wrapped as `ErrInvalidInput` and return 422 Unprocessable Entity:
+
+```json
+{
+  "error": "invalid_input",
+  "message": "password: password must contain at least one uppercase letter."
+}
+```
+
+**Benefits:**
+- **Declarative** - Validation rules are clear and concise
+- **Reusable** - Custom rules can be shared across the application
+- **Type-Safe** - Compile-time validation of struct fields
+- **Extensible** - Easy to add custom validation rules
+- **Consistent** - Same validation logic at DTO and use case layers
+- **User-Friendly** - Detailed error messages help API clients fix issues
+
 ### Transaction Management
 
 The template implements a TxManager interface for handling database transactions:
@@ -869,6 +976,7 @@ go tool cover -html=coverage.out
 - [godotenv](https://github.com/joho/godotenv) - Loads environment variables from .env files
 - [go-pwdhash](https://github.com/allisson/go-pwdhash) - Password hashing with Argon2id
 - [sqlutil](https://github.com/allisson/sqlutil) - SQL utilities for unified database access
+- [validation](https://github.com/jellydator/validation) - Advanced input validation library
 - [urfave/cli](https://github.com/urfave/cli) - CLI framework
 - [golang-migrate](https://github.com/golang-migrate/migrate) - Database migrations
 
@@ -891,5 +999,6 @@ This template uses the following excellent Go libraries:
 - github.com/allisson/go-env
 - github.com/allisson/go-pwdhash
 - github.com/allisson/sqlutil
+- github.com/jellydator/validation
 - github.com/urfave/cli
 - github.com/golang-migrate/migrate
