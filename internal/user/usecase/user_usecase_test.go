@@ -102,7 +102,7 @@ func TestUserUseCase_RegisterUser_Success(t *testing.T) {
 	input := RegisterUserInput{
 		Name:     "John Doe",
 		Email:    "john@example.com",
-		Password: "securepassword123",
+		Password: "SecurePass123!",
 	}
 
 	// Setup expectations
@@ -136,7 +136,7 @@ func TestUserUseCase_RegisterUser_CreateUserError(t *testing.T) {
 	input := RegisterUserInput{
 		Name:     "John Doe",
 		Email:    "john@example.com",
-		Password: "securepassword123",
+		Password: "SecurePass123!",
 	}
 
 	createError := errors.New("database error")
@@ -168,7 +168,7 @@ func TestUserUseCase_RegisterUser_CreateOutboxEventError(t *testing.T) {
 	input := RegisterUserInput{
 		Name:     "John Doe",
 		Email:    "john@example.com",
-		Password: "securepassword123",
+		Password: "SecurePass123!",
 	}
 
 	outboxError := errors.New("outbox error")
@@ -201,7 +201,7 @@ func TestUserUseCase_RegisterUser_VerifyOutboxPayload(t *testing.T) {
 	input := RegisterUserInput{
 		Name:     "John Doe",
 		Email:    "john@example.com",
-		Password: "securepassword123",
+		Password: "SecurePass123!",
 	}
 
 	// Setup expectations

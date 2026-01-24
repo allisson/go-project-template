@@ -237,7 +237,7 @@ func TestUserHandler_Register_Success(t *testing.T) {
 	req := dto.RegisterUserRequest{
 		Name:     "John Doe",
 		Email:    "john@example.com",
-		Password: "securepassword123",
+		Password: "SecurePass123!",
 	}
 
 	input := userUsecase.RegisterUserInput{
@@ -304,7 +304,7 @@ func TestUserHandler_Register_ValidationError(t *testing.T) {
 			input: dto.RegisterUserRequest{
 				Name:     "",
 				Email:    "john@example.com",
-				Password: "password",
+				Password: "SecurePass123!",
 			},
 		},
 		{
@@ -312,7 +312,7 @@ func TestUserHandler_Register_ValidationError(t *testing.T) {
 			input: dto.RegisterUserRequest{
 				Name:     "John Doe",
 				Email:    "",
-				Password: "password",
+				Password: "SecurePass123!",
 			},
 		},
 		{
@@ -352,7 +352,7 @@ func TestUserHandler_Register_UseCaseError(t *testing.T) {
 	req := dto.RegisterUserRequest{
 		Name:     "John Doe",
 		Email:    "john@example.com",
-		Password: "securepassword123",
+		Password: "SecurePass123!",
 	}
 
 	input := userUsecase.RegisterUserInput{

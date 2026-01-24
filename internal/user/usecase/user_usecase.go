@@ -6,10 +6,13 @@ import (
 	"encoding/json"
 	"strings"
 
+	validation "github.com/jellydator/validation"
+
 	"github.com/allisson/go-project-template/internal/database"
 	apperrors "github.com/allisson/go-project-template/internal/errors"
 	outboxDomain "github.com/allisson/go-project-template/internal/outbox/domain"
 	"github.com/allisson/go-project-template/internal/user/domain"
+	appValidation "github.com/allisson/go-project-template/internal/validation"
 	"github.com/allisson/go-pwdhash"
 )
 
@@ -69,22 +72,37 @@ func NewUserUseCase(
 	}, nil
 }
 
-// validateRegisterUserInput validates the registration input
+// validateRegisterUserInput validates the registration input using jellydator/validation
+// This provides comprehensive validation including:
+// - Required field checks
+// - Email format validation
+// - Password strength requirements (min 8 chars, uppercase, lowercase, number, special char)
 func (uc *UserUseCase) validateRegisterUserInput(input RegisterUserInput) error {
-	if strings.TrimSpace(input.Name) == "" {
-		return domain.ErrNameRequired
-	}
-	if strings.TrimSpace(input.Email) == "" {
-		return domain.ErrEmailRequired
-	}
-	if input.Password == "" {
-		return domain.ErrPasswordRequired
-	}
-	// Basic email validation
-	if !strings.Contains(input.Email, "@") || !strings.Contains(input.Email, ".") {
-		return domain.ErrInvalidEmail
-	}
-	return nil
+	err := validation.ValidateStruct(&input,
+		validation.Field(&input.Name,
+			validation.Required.Error("name is required"),
+			appValidation.NotBlank,
+			validation.Length(1, 255).Error("name must be between 1 and 255 characters"),
+		),
+		validation.Field(&input.Email,
+			validation.Required.Error("email is required"),
+			appValidation.NotBlank,
+			appValidation.Email,
+			validation.Length(5, 255).Error("email must be between 5 and 255 characters"),
+		),
+		validation.Field(&input.Password,
+			validation.Required.Error("password is required"),
+			validation.Length(8, 128).Error("password must be between 8 and 128 characters"),
+			appValidation.PasswordStrength{
+				MinLength:      8,
+				RequireUpper:   true,
+				RequireLower:   true,
+				RequireNumber:  true,
+				RequireSpecial: true,
+			},
+		),
+	)
+	return appValidation.WrapValidationError(err)
 }
 
 // RegisterUser registers a new user and creates a user.created event
