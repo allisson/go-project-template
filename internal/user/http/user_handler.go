@@ -1,4 +1,4 @@
-// Package http provides HTTP server implementation and request handlers.
+// Package http provides HTTP handlers for user-related operations.
 package http
 
 import (
@@ -7,8 +7,10 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/allisson/go-project-template/internal/domain"
-	"github.com/allisson/go-project-template/internal/usecase"
+	"github.com/allisson/go-project-template/internal/httputil"
+	"github.com/allisson/go-project-template/internal/user/domain"
+	"github.com/allisson/go-project-template/internal/user/http/dto"
+	"github.com/allisson/go-project-template/internal/user/usecase"
 )
 
 // UserUseCaseInterface defines the interface for user use case operations
@@ -39,29 +41,34 @@ func (h *UserHandler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var input usecase.RegisterUserInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	var req dto.RegisterUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		if h.logger != nil {
 			h.logger.Error("failed to decode request body", slog.Any("error", err))
 		}
-		makeJSONResponse(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		httputil.MakeJSONResponse(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
 
-	// Validate input
-	if input.Name == "" || input.Email == "" || input.Password == "" {
-		makeJSONResponse(w, http.StatusBadRequest, map[string]string{"error": "name, email, and password are required"})
+	// Validate request
+	if err := req.Validate(); err != nil {
+		httputil.MakeJSONResponse(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
+
+	// Convert DTO to use case input
+	input := dto.ToRegisterUserInput(req)
 
 	user, err := h.userUseCase.RegisterUser(r.Context(), input)
 	if err != nil {
 		if h.logger != nil {
 			h.logger.Error("failed to register user", slog.Any("error", err))
 		}
-		makeJSONResponse(w, http.StatusInternalServerError, map[string]string{"error": "failed to register user"})
+		httputil.MakeJSONResponse(w, http.StatusInternalServerError, map[string]string{"error": "failed to register user"})
 		return
 	}
 
-	makeJSONResponse(w, http.StatusCreated, user)
+	// Convert domain model to response DTO
+	response := dto.ToUserResponse(user)
+	httputil.MakeJSONResponse(w, http.StatusCreated, response)
 }

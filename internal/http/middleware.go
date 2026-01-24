@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/allisson/go-project-template/internal/httputil"
 )
 
 // Middleware defines a function to wrap http.Handler
@@ -45,7 +47,7 @@ func RecoveryMiddleware(logger *slog.Logger) Middleware {
 						slog.String("method", r.Method),
 					)
 
-					makeJSONResponse(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+					httputil.MakeJSONResponse(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 				}
 			}()
 
@@ -79,7 +81,7 @@ func ChainMiddleware(middlewares ...Middleware) Middleware {
 // HealthHandler returns a simple health check handler
 func HealthHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		makeJSONResponse(w, http.StatusOK, map[string]string{"status": "healthy"})
+		httputil.MakeJSONResponse(w, http.StatusOK, map[string]string{"status": "healthy"})
 	})
 }
 
@@ -89,11 +91,11 @@ func ReadinessHandler(ctx context.Context) http.Handler {
 		// Check if context is cancelled (application is shutting down)
 		select {
 		case <-ctx.Done():
-			makeJSONResponse(w, http.StatusServiceUnavailable, map[string]string{"status": "not ready"})
+			httputil.MakeJSONResponse(w, http.StatusServiceUnavailable, map[string]string{"status": "not ready"})
 			return
 		default:
 		}
 
-		makeJSONResponse(w, http.StatusOK, map[string]string{"status": "ready"})
+		httputil.MakeJSONResponse(w, http.StatusOK, map[string]string{"status": "ready"})
 	})
 }
