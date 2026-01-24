@@ -22,7 +22,8 @@ A production-ready Go project template following Clean Architecture and Domain-D
 - **Input Validation** - Advanced validation with jellydator/validation library including password strength, email format, and custom rules
 - **Password Hashing** - Secure password hashing with Argon2id via go-pwdhash
 - **Docker Support** - Multi-stage Dockerfile for minimal container size
-- **CI/CD** - GitHub Actions workflow for linting and testing
+- **Integration Testing** - Real database tests using Docker Compose instead of mocks
+- **CI/CD** - GitHub Actions workflow with PostgreSQL and MySQL for comprehensive testing
 - **Comprehensive Makefile** - Easy development and deployment commands
 
 ## Project Structure
@@ -73,6 +74,8 @@ go-project-template/
 │   ├── validation/             # Custom validation rules
 │   │   ├── rules.go
 │   │   └── rules_test.go
+│   ├── testutil/               # Test utilities
+│   │   └── database.go         # Database test helpers
 │   └── worker/                 # Background workers
 │       └── event_worker.go
 ├── migrations/
@@ -80,7 +83,8 @@ go-project-template/
 │   └── postgresql/             # PostgreSQL migrations
 ├── .github/
 │   └── workflows/
-│       └── ci.yml
+│       └── ci.yml              # CI workflow with PostgreSQL & MySQL
+├── docker-compose.test.yml     # Test database configuration
 ├── Dockerfile
 ├── Makefile
 ├── go.mod
@@ -104,6 +108,7 @@ The project follows a modular domain architecture where each business domain is 
 - **`httputil/`** - Shared HTTP utility functions including error mapping and JSON responses
 - **`config/`** - Application-wide configuration
 - **`database/`** - Database connection and transaction management
+- **`testutil/`** - Test helper utilities for database setup and cleanup
 - **`worker/`** - Background processing infrastructure
 
 This structure makes it easy to add new domains (e.g., `internal/product/`, `internal/order/`) without affecting existing modules.
@@ -111,8 +116,8 @@ This structure makes it easy to add new domains (e.g., `internal/product/`, `int
 ## Prerequisites
 
 - Go 1.25 or higher
-- PostgreSQL 12+ or MySQL 8.0+
-- Docker (optional)
+- PostgreSQL 12+ or MySQL 8.0+ (for development)
+- Docker and Docker Compose (for testing and optional development)
 - Make (optional, for convenience commands)
 
 ## Quick Start
@@ -495,17 +500,34 @@ Then use `httputil.HandleError()` in your HTTP handlers for automatic mapping.
 make build
 ```
 
-### Run tests
+### Testing
 
+**Start test databases:**
+```bash
+make test-db-up
+```
+
+**Run tests:**
 ```bash
 make test
 ```
 
-### Run tests with coverage
+**Run tests with automatic database management:**
+```bash
+make test-with-db  # Starts databases, runs tests, stops databases
+```
 
+**Run tests with coverage:**
 ```bash
 make test-coverage
 ```
+
+**Stop test databases:**
+```bash
+make test-db-down
+```
+
+See the [Testing](#testing) section for more details.
 
 ### Run linter
 
@@ -642,6 +664,55 @@ func GetTx(ctx context.Context, db *sql.DB) Querier {
 ```
 
 This pattern ensures repositories work seamlessly within transactions managed by the use case layer.
+
+### Testing Approach
+
+The project uses **integration testing with real databases** instead of mocks for repository layer tests. This approach provides:
+
+- **Accuracy** - Tests verify actual SQL queries and database behavior
+- **Real Integration** - Catches database-specific issues (constraints, types, unique violations, etc.)
+- **Production Parity** - Tests reflect real production scenarios
+- **Less Maintenance** - No mock expectations to maintain or update
+- **Confidence** - Full database integration coverage
+
+**Test Infrastructure:**
+
+Tests use Docker Compose to spin up isolated test databases (PostgreSQL on port 5433, MySQL on port 3307) with dedicated test credentials. The `testutil` package provides helper functions that:
+
+1. Connect to test databases
+2. Run migrations automatically
+3. Clean up data between tests
+4. Provide isolated test environments
+
+**Example test structure:**
+
+```go
+func TestPostgreSQLUserRepository_Create(t *testing.T) {
+    db := testutil.SetupPostgresDB(t)           // Connect and run migrations
+    defer testutil.TeardownDB(t, db)            // Clean up connection
+    defer testutil.CleanupPostgresDB(t, db)     // Clean up test data
+    
+    repo := NewPostgreSQLUserRepository(db)
+    ctx := context.Background()
+    
+    user := &domain.User{
+        ID:       uuid.Must(uuid.NewV7()),
+        Name:     "John Doe",
+        Email:    "john@example.com",
+        Password: "hashed_password",
+    }
+    
+    err := repo.Create(ctx, user)
+    assert.NoError(t, err)
+    
+    // Verify by querying the real database
+    createdUser, err := repo.GetByID(ctx, user.ID)
+    assert.NoError(t, err)
+    assert.Equal(t, user.Name, createdUser.Name)
+}
+```
+
+This testing strategy ensures repository implementations work correctly with actual databases while maintaining fast test execution (~15 seconds for the full test suite).
 
 ### Dependency Injection Container
 
@@ -1132,20 +1203,93 @@ migrate -path migrations/postgresql -database "postgres://user:password@localhos
 
 ## Testing
 
-The project includes a CI workflow that runs tests with PostgreSQL.
+The project uses real databases (PostgreSQL and MySQL) for testing instead of mocks, ensuring tests accurately reflect production behavior.
 
-### Running tests locally
+### Test Infrastructure
+
+Tests use Docker Compose to run test databases with dedicated test credentials and ports:
+
+- **PostgreSQL**: `localhost:5433` (testuser/testpassword/testdb)
+- **MySQL**: `localhost:3307` (testuser/testpassword/testdb)
+
+The test helper utilities (`internal/testutil/database.go`) automatically:
+1. Connect to test databases
+2. Run migrations automatically before tests
+3. Clean up data between tests to prevent pollution
+4. Provide isolated test environments
+
+**Important:** Both local development (via Docker Compose) and CI (via GitHub Actions) use identical database configurations, ensuring tests behave the same in all environments.
+
+### Running Tests
+
+**Start test databases:**
+```bash
+make test-db-up
+```
+
+**Run all tests:**
+```bash
+make test
+```
+
+**Run tests with coverage:**
+```bash
+make test-coverage
+```
+
+**Run tests and manage databases automatically:**
+```bash
+make test-with-db  # Starts databases, runs tests, stops databases
+```
+
+**Stop test databases:**
+```bash
+make test-db-down
+```
+
+### Running Tests Locally
 
 ```bash
+# With test databases already running
 go test -v -race ./...
 ```
 
-### With coverage
+### Test Structure
 
-```bash
-go test -v -race -coverprofile=coverage.out ./...
-go tool cover -html=coverage.out
+Tests use real database connections instead of mocks:
+
+```go
+func TestPostgreSQLUserRepository_Create(t *testing.T) {
+    db := testutil.SetupPostgresDB(t)           // Connect and run migrations
+    defer testutil.TeardownDB(t, db)            // Clean up connection
+    defer testutil.CleanupPostgresDB(t, db)     // Clean up test data
+    
+    repo := NewPostgreSQLUserRepository(db)
+    // ... test implementation
+}
 ```
+
+**Benefits of using real databases:**
+- Tests verify actual SQL queries and database interactions
+- Catches database-specific issues (constraints, types, etc.)
+- Tests reflect production behavior more accurately
+- No need to maintain mock expectations
+
+### CI/CD Testing
+
+The GitHub Actions workflow automatically:
+1. Starts PostgreSQL (port 5433) and MySQL (port 3307) containers
+2. Waits for both databases to be healthy
+3. Runs all tests with race detection against both databases
+4. Generates and uploads coverage reports to Codecov
+
+**CI Configuration:**
+- Uses the same database credentials as local tests (testuser/testpassword/testdb)
+- Same port mappings as Docker Compose (5433 for Postgres, 3307 for MySQL)
+- Runs on every push to `main` and all pull requests
+- All tests must pass before merging
+
+This ensures complete consistency between local development and CI environments.
 
 ## Dependencies
 

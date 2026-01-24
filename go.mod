@@ -3,7 +3,6 @@ module github.com/allisson/go-project-template
 go 1.25
 
 require (
-	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/allisson/go-env v0.6.0
 	github.com/allisson/go-pwdhash v0.3.1
 	github.com/go-sql-driver/mysql v1.9.3

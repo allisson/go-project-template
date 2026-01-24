@@ -35,6 +35,18 @@ test: ## Run tests
 	@go test -v -race -coverprofile=coverage.out ./...
 	@go tool cover -func=coverage.out
 
+test-with-db: test-db-up test test-db-down ## Run tests with test databases
+
+test-db-up: ## Start test databases
+	@echo "Starting test databases..."
+	@docker compose -f docker-compose.test.yml up -d
+	@echo "Waiting for databases to be ready..."
+	@sleep 10
+
+test-db-down: ## Stop test databases
+	@echo "Stopping test databases..."
+	@docker compose -f docker-compose.test.yml down -v
+
 test-coverage: test ## Run tests and show coverage in browser
 	@go tool cover -html=coverage.out
 
