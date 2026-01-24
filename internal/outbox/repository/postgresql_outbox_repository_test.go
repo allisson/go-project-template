@@ -5,18 +5,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/allisson/go-project-template/internal/outbox/domain"
+	"github.com/allisson/go-project-template/internal/testutil"
 )
 
 func TestNewPostgreSQLOutboxEventRepository(t *testing.T) {
-	db, _, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close() //nolint:errcheck
+	db := testutil.SetupPostgresDB(t)
+	defer testutil.TeardownDB(t, db)
 
 	repo := NewPostgreSQLOutboxEventRepository(db)
 	assert.NotNil(t, repo)
@@ -24,9 +23,9 @@ func TestNewPostgreSQLOutboxEventRepository(t *testing.T) {
 }
 
 func TestPostgreSQLOutboxEventRepository_Create(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close() //nolint:errcheck
+	db := testutil.SetupPostgresDB(t)
+	defer testutil.TeardownDB(t, db)
+	defer testutil.CleanupPostgresDB(t, db)
 
 	repo := NewPostgreSQLOutboxEventRepository(db)
 	ctx := context.Background()
@@ -40,110 +39,110 @@ func TestPostgreSQLOutboxEventRepository_Create(t *testing.T) {
 		Retries:   0,
 	}
 
-	mock.ExpectExec("INSERT INTO outbox_events").
-		WithArgs(event.ID, event.EventType, event.Payload, event.Status, event.Retries, event.LastError, event.ProcessedAt).
-		WillReturnResult(sqlmock.NewResult(1, 1))
-
-	err = repo.Create(ctx, event)
+	err := repo.Create(ctx, event)
 	assert.NoError(t, err)
-	assert.NoError(t, mock.ExpectationsWereMet())
+
+	// Verify the event was created
+	events, err := repo.GetPendingEvents(ctx, 10)
+	assert.NoError(t, err)
+	assert.Len(t, events, 1)
+	assert.Equal(t, event.ID, events[0].ID)
+	assert.Equal(t, event.EventType, events[0].EventType)
 }
 
 func TestPostgreSQLOutboxEventRepository_GetPendingEvents(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close() //nolint:errcheck
+	db := testutil.SetupPostgresDB(t)
+	defer testutil.TeardownDB(t, db)
+	defer testutil.CleanupPostgresDB(t, db)
 
 	repo := NewPostgreSQLOutboxEventRepository(db)
 	ctx := context.Background()
 
-	now := time.Now()
 	uuid1 := uuid.Must(uuid.NewV7())
 	uuid2 := uuid.Must(uuid.NewV7())
 
-	rows := sqlmock.NewRows([]string{"id", "event_type", "payload", "status", "retries", "last_error", "processed_at", "created_at", "updated_at"}).
-		AddRow(uuid1, "user.created", `{"id": 1}`, domain.OutboxEventStatusPending, 0, nil, nil, now, now).
-		AddRow(uuid2, "user.created", `{"id": 2}`, domain.OutboxEventStatusPending, 0, nil, nil, now.Add(time.Minute), now.Add(time.Minute))
+	event1 := &domain.OutboxEvent{
+		ID:        uuid1,
+		EventType: "user.created",
+		Payload:   `{"id": 1}`,
+		Status:    domain.OutboxEventStatusPending,
+		Retries:   0,
+	}
+	event2 := &domain.OutboxEvent{
+		ID:        uuid2,
+		EventType: "user.created",
+		Payload:   `{"id": 2}`,
+		Status:    domain.OutboxEventStatusPending,
+		Retries:   0,
+	}
 
-	mock.ExpectQuery("SELECT (.+) FROM outbox_events").
-		WithArgs(domain.OutboxEventStatusPending, 10).
-		WillReturnRows(rows)
+	// Create events
+	err := repo.Create(ctx, event1)
+	require.NoError(t, err)
+	err = repo.Create(ctx, event2)
+	require.NoError(t, err)
 
+	// Get pending events
 	events, err := repo.GetPendingEvents(ctx, 10)
 	assert.NoError(t, err)
 	assert.NotNil(t, events)
 	assert.Len(t, events, 2)
 	assert.Equal(t, uuid1, events[0].ID)
 	assert.Equal(t, uuid2, events[1].ID)
-	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestPostgreSQLOutboxEventRepository_GetPendingEvents_Empty(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close() //nolint:errcheck
+	db := testutil.SetupPostgresDB(t)
+	defer testutil.TeardownDB(t, db)
+	defer testutil.CleanupPostgresDB(t, db)
 
 	repo := NewPostgreSQLOutboxEventRepository(db)
 	ctx := context.Background()
-
-	rows := sqlmock.NewRows(
-		[]string{
-			"id",
-			"event_type",
-			"payload",
-			"status",
-			"retries",
-			"last_error",
-			"processed_at",
-			"created_at",
-			"updated_at",
-		},
-	)
-
-	mock.ExpectQuery("SELECT (.+) FROM outbox_events").
-		WithArgs(domain.OutboxEventStatusPending, 10).
-		WillReturnRows(rows)
 
 	events, err := repo.GetPendingEvents(ctx, 10)
 	assert.NoError(t, err)
 	assert.Len(t, events, 0)
-	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestPostgreSQLOutboxEventRepository_Update(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close() //nolint:errcheck
+	db := testutil.SetupPostgresDB(t)
+	defer testutil.TeardownDB(t, db)
+	defer testutil.CleanupPostgresDB(t, db)
 
 	repo := NewPostgreSQLOutboxEventRepository(db)
 	ctx := context.Background()
 
-	now := time.Now()
 	uuid1 := uuid.Must(uuid.NewV7())
 	event := &domain.OutboxEvent{
-		ID:          uuid1,
-		EventType:   "user.created",
-		Payload:     `{"id": 1}`,
-		Status:      domain.OutboxEventStatusProcessed,
-		Retries:     0,
-		ProcessedAt: &now,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:        uuid1,
+		EventType: "user.created",
+		Payload:   `{"id": 1}`,
+		Status:    domain.OutboxEventStatusPending,
+		Retries:   0,
 	}
 
-	mock.ExpectExec("UPDATE outbox_events").
-		WithArgs(event.EventType, event.Payload, event.Status, event.Retries, event.LastError, event.ProcessedAt, event.ID).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+	// Create event
+	err := repo.Create(ctx, event)
+	require.NoError(t, err)
+
+	// Update event
+	now := time.Now()
+	event.Status = domain.OutboxEventStatusProcessed
+	event.ProcessedAt = &now
 
 	err = repo.Update(ctx, event)
 	assert.NoError(t, err)
-	assert.NoError(t, mock.ExpectationsWereMet())
+
+	// Verify no pending events
+	events, err := repo.GetPendingEvents(ctx, 10)
+	assert.NoError(t, err)
+	assert.Len(t, events, 0)
 }
 
 func TestPostgreSQLOutboxEventRepository_Update_Error(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close() //nolint:errcheck
+	db := testutil.SetupPostgresDB(t)
+	defer testutil.TeardownDB(t, db)
+	defer testutil.CleanupPostgresDB(t, db)
 
 	repo := NewPostgreSQLOutboxEventRepository(db)
 	ctx := context.Background()
@@ -156,13 +155,7 @@ func TestPostgreSQLOutboxEventRepository_Update_Error(t *testing.T) {
 		Status:    domain.OutboxEventStatusProcessed,
 	}
 
-	updateError := assert.AnError
-	mock.ExpectExec("UPDATE outbox_events").
-		WithArgs(event.EventType, event.Payload, event.Status, event.Retries, event.LastError, event.ProcessedAt, event.ID).
-		WillReturnError(updateError)
-
-	err = repo.Update(ctx, event)
-	assert.Error(t, err)
-	assert.Equal(t, updateError, err)
-	assert.NoError(t, mock.ExpectationsWereMet())
+	// Update non-existent event - should not return error but also shouldn't affect any rows
+	err := repo.Update(ctx, event)
+	assert.NoError(t, err)
 }

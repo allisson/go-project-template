@@ -2,23 +2,20 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"testing"
-	"time"
 
-	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	apperrors "github.com/allisson/go-project-template/internal/errors"
+	"github.com/allisson/go-project-template/internal/testutil"
 	"github.com/allisson/go-project-template/internal/user/domain"
 )
 
 func TestNewPostgreSQLUserRepository(t *testing.T) {
-	db, _, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close() //nolint:errcheck
+	db := testutil.SetupPostgresDB(t)
+	defer testutil.TeardownDB(t, db)
 
 	repo := NewPostgreSQLUserRepository(db)
 	assert.NotNil(t, repo)
@@ -26,9 +23,9 @@ func TestNewPostgreSQLUserRepository(t *testing.T) {
 }
 
 func TestPostgreSQLUserRepository_Create(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close() //nolint:errcheck
+	db := testutil.SetupPostgresDB(t)
+	defer testutil.TeardownDB(t, db)
+	defer testutil.CleanupPostgresDB(t, db)
 
 	repo := NewPostgreSQLUserRepository(db)
 	ctx := context.Background()
@@ -41,117 +38,104 @@ func TestPostgreSQLUserRepository_Create(t *testing.T) {
 		Password: "hashed_password",
 	}
 
-	mock.ExpectExec("INSERT INTO users").
-		WithArgs(user.ID, user.Name, user.Email, user.Password).
-		WillReturnResult(sqlmock.NewResult(1, 1))
-
-	err = repo.Create(ctx, user)
+	err := repo.Create(ctx, user)
 	assert.NoError(t, err)
-	assert.NoError(t, mock.ExpectationsWereMet())
+
+	// Verify the user was created
+	createdUser, err := repo.GetByID(ctx, uuid1)
+	assert.NoError(t, err)
+	assert.Equal(t, user.ID, createdUser.ID)
+	assert.Equal(t, user.Name, createdUser.Name)
+	assert.Equal(t, user.Email, createdUser.Email)
+	assert.Equal(t, user.Password, createdUser.Password)
+	assert.False(t, createdUser.CreatedAt.IsZero())
+	assert.False(t, createdUser.UpdatedAt.IsZero())
 }
 
 func TestPostgreSQLUserRepository_GetByID(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close() //nolint:errcheck
+	db := testutil.SetupPostgresDB(t)
+	defer testutil.TeardownDB(t, db)
+	defer testutil.CleanupPostgresDB(t, db)
 
 	repo := NewPostgreSQLUserRepository(db)
 	ctx := context.Background()
 
 	uuid1 := uuid.Must(uuid.NewV7())
 	expectedUser := &domain.User{
-		ID:        uuid1,
-		Name:      "John Doe",
-		Email:     "john@example.com",
-		Password:  "hashed_password",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID:       uuid1,
+		Name:     "John Doe",
+		Email:    "john@example.com",
+		Password: "hashed_password",
 	}
 
-	rows := sqlmock.NewRows([]string{"id", "name", "email", "password", "created_at", "updated_at"}).
-		AddRow(expectedUser.ID, expectedUser.Name, expectedUser.Email, expectedUser.Password, expectedUser.CreatedAt, expectedUser.UpdatedAt)
+	// Create the user first
+	err := repo.Create(ctx, expectedUser)
+	require.NoError(t, err)
 
-	mock.ExpectQuery("SELECT (.+) FROM users").
-		WithArgs(uuid1).
-		WillReturnRows(rows)
-
+	// Get the user by ID
 	user, err := repo.GetByID(ctx, uuid1)
 	assert.NoError(t, err)
 	assert.NotNil(t, user)
 	assert.Equal(t, expectedUser.ID, user.ID)
 	assert.Equal(t, expectedUser.Name, user.Name)
 	assert.Equal(t, expectedUser.Email, user.Email)
-	assert.NoError(t, mock.ExpectationsWereMet())
+	assert.False(t, user.CreatedAt.IsZero())
+	assert.False(t, user.UpdatedAt.IsZero())
 }
 
 func TestPostgreSQLUserRepository_GetByID_NotFound(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close() //nolint:errcheck
+	db := testutil.SetupPostgresDB(t)
+	defer testutil.TeardownDB(t, db)
+	defer testutil.CleanupPostgresDB(t, db)
 
 	repo := NewPostgreSQLUserRepository(db)
 	ctx := context.Background()
 
 	notFoundUUID := uuid.Must(uuid.NewV7())
-	mock.ExpectQuery("SELECT (.+) FROM users").
-		WithArgs(notFoundUUID).
-		WillReturnError(sql.ErrNoRows)
-
 	user, err := repo.GetByID(ctx, notFoundUUID)
 	assert.Error(t, err)
 	assert.Nil(t, user)
 	assert.True(t, apperrors.Is(err, domain.ErrUserNotFound))
-	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestPostgreSQLUserRepository_GetByEmail(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close() //nolint:errcheck
+	db := testutil.SetupPostgresDB(t)
+	defer testutil.TeardownDB(t, db)
+	defer testutil.CleanupPostgresDB(t, db)
 
 	repo := NewPostgreSQLUserRepository(db)
 	ctx := context.Background()
 
 	uuid1 := uuid.Must(uuid.NewV7())
 	expectedUser := &domain.User{
-		ID:        uuid1,
-		Name:      "John Doe",
-		Email:     "john@example.com",
-		Password:  "hashed_password",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID:       uuid1,
+		Name:     "John Doe",
+		Email:    "john@example.com",
+		Password: "hashed_password",
 	}
 
-	rows := sqlmock.NewRows([]string{"id", "name", "email", "password", "created_at", "updated_at"}).
-		AddRow(expectedUser.ID, expectedUser.Name, expectedUser.Email, expectedUser.Password, expectedUser.CreatedAt, expectedUser.UpdatedAt)
+	// Create the user first
+	err := repo.Create(ctx, expectedUser)
+	require.NoError(t, err)
 
-	mock.ExpectQuery("SELECT (.+) FROM users").
-		WithArgs("john@example.com").
-		WillReturnRows(rows)
-
+	// Get the user by email
 	user, err := repo.GetByEmail(ctx, "john@example.com")
 	assert.NoError(t, err)
 	assert.NotNil(t, user)
 	assert.Equal(t, expectedUser.ID, user.ID)
 	assert.Equal(t, expectedUser.Email, user.Email)
-	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestPostgreSQLUserRepository_GetByEmail_NotFound(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close() //nolint:errcheck
+	db := testutil.SetupPostgresDB(t)
+	defer testutil.TeardownDB(t, db)
+	defer testutil.CleanupPostgresDB(t, db)
 
 	repo := NewPostgreSQLUserRepository(db)
 	ctx := context.Background()
-
-	mock.ExpectQuery("SELECT (.+) FROM users").
-		WithArgs("notfound@example.com").
-		WillReturnError(sql.ErrNoRows)
 
 	user, err := repo.GetByEmail(ctx, "notfound@example.com")
 	assert.Error(t, err)
 	assert.Nil(t, user)
 	assert.True(t, apperrors.Is(err, domain.ErrUserNotFound))
-	assert.NoError(t, mock.ExpectationsWereMet())
 }
