@@ -11,6 +11,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/allisson/go-project-template/internal/httputil"
 	userDomain "github.com/allisson/go-project-template/internal/user/domain"
 	userHttp "github.com/allisson/go-project-template/internal/user/http"
 	userUsecase "github.com/allisson/go-project-template/internal/user/usecase"
@@ -82,7 +83,7 @@ func TestMakeJSONResponse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			makeJSONResponse(w, tt.statusCode, tt.body)
+			httputil.MakeJSONResponse(w, tt.statusCode, tt.body)
 
 			assert.Equal(t, tt.statusCode, w.Code)
 			assert.Equal(t, "application/json", w.Header().Get("Content-Type"))

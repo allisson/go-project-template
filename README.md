@@ -38,6 +38,8 @@ go-project-template/
 │   │   ├── middleware.go
 │   │   ├── response.go
 │   │   └── server.go
+│   ├── httputil/               # HTTP utility functions
+│   │   └── response.go
 │   ├── outbox/                 # Outbox domain module
 │   │   ├── domain/             # Outbox entities
 │   │   │   └── outbox_event.go
@@ -74,6 +76,13 @@ The project follows a modular domain architecture where each business domain is 
 - **`usecase/`** - Implements business logic and orchestrates operations
 - **`repository/`** - Handles data persistence and retrieval
 - **`http/`** - Contains HTTP handlers and request/response types
+
+### Shared Utilities
+
+- **`httputil/`** - Shared HTTP utility functions used across all domain modules (e.g., `MakeJSONResponse`)
+- **`config/`** - Application-wide configuration
+- **`database/`** - Database connection and transaction management
+- **`worker/`** - Background processing infrastructure
 
 This structure makes it easy to add new domains (e.g., `internal/product/`, `internal/order/`) without affecting existing modules.
 
@@ -334,6 +343,7 @@ The project follows a modular domain-driven structure where each business domain
 - `config/` - Application configuration
 - `database/` - Database connection and transaction management
 - `http/` - HTTP server, middleware, and shared utilities
+- `httputil/` - Reusable HTTP utilities (JSON responses, error handling)
 - `worker/` - Background event processing
 
 ### Benefits of This Structure
@@ -359,12 +369,15 @@ internal/product/
     └── product_handler.go
 ```
 
+**Tip:** Use the shared `httputil.MakeJSONResponse` function in your HTTP handlers for consistent JSON responses across all domains.
+
 ### Clean Architecture Layers
 
 1. **Domain Layer** - Contains business entities and rules (e.g., `internal/user/domain`)
 2. **Repository Layer** - Data access implementations using sqlutil (e.g., `internal/user/repository`)
 3. **Use Case Layer** - Application business logic (e.g., `internal/user/usecase`)
 4. **Presentation Layer** - HTTP handlers and server (e.g., `internal/user/http`)
+5. **Utility Layer** - Shared utilities and helpers (e.g., `internal/httputil`)
 
 ### Transaction Management
 
@@ -377,6 +390,30 @@ type TxManager interface {
 ```
 
 Transactions are automatically injected into the context and used by repositories.
+
+### HTTP Utilities
+
+The `httputil` package provides shared HTTP utilities used across all domain modules:
+
+**MakeJSONResponse** - Standardized JSON response formatting:
+
+```go
+import "github.com/allisson/go-project-template/internal/httputil"
+
+func (h *ProductHandler) GetProduct(w http.ResponseWriter, r *http.Request) {
+    product, err := h.productUseCase.GetProduct(r.Context(), productID)
+    if err != nil {
+        httputil.MakeJSONResponse(w, http.StatusNotFound, map[string]string{
+            "error": "product not found",
+        })
+        return
+    }
+    
+    httputil.MakeJSONResponse(w, http.StatusOK, product)
+}
+```
+
+This ensures consistent response formatting across all HTTP endpoints and eliminates code duplication.
 
 ### Transactional Outbox Pattern
 

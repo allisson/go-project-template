@@ -7,18 +7,10 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/allisson/go-project-template/internal/httputil"
 	"github.com/allisson/go-project-template/internal/user/domain"
 	"github.com/allisson/go-project-template/internal/user/usecase"
 )
-
-// makeJSONResponse writes a JSON response with the given status code and data
-func makeJSONResponse(w http.ResponseWriter, statusCode int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	if err := json.NewEncoder(w).Encode(data); err != nil {
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
-	}
-}
 
 // UserUseCaseInterface defines the interface for user use case operations
 type UserUseCaseInterface interface {
@@ -53,13 +45,13 @@ func (h *UserHandler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 		if h.logger != nil {
 			h.logger.Error("failed to decode request body", slog.Any("error", err))
 		}
-		makeJSONResponse(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		httputil.MakeJSONResponse(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
 
 	// Validate input
 	if input.Name == "" || input.Email == "" || input.Password == "" {
-		makeJSONResponse(w, http.StatusBadRequest, map[string]string{"error": "name, email, and password are required"})
+		httputil.MakeJSONResponse(w, http.StatusBadRequest, map[string]string{"error": "name, email, and password are required"})
 		return
 	}
 
@@ -68,9 +60,9 @@ func (h *UserHandler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 		if h.logger != nil {
 			h.logger.Error("failed to register user", slog.Any("error", err))
 		}
-		makeJSONResponse(w, http.StatusInternalServerError, map[string]string{"error": "failed to register user"})
+		httputil.MakeJSONResponse(w, http.StatusInternalServerError, map[string]string{"error": "failed to register user"})
 		return
 	}
 
-	makeJSONResponse(w, http.StatusCreated, user)
+	httputil.MakeJSONResponse(w, http.StatusCreated, user)
 }
