@@ -1,7 +1,7 @@
 // Package dto provides data transfer objects for the user HTTP layer.
 package dto
 
-import "errors"
+import "github.com/allisson/go-project-template/internal/user/domain"
 
 // RegisterUserRequest represents the API request for user registration
 type RegisterUserRequest struct {
@@ -11,15 +11,17 @@ type RegisterUserRequest struct {
 }
 
 // Validate validates the RegisterUserRequest
+// Note: This provides basic JSON structure validation.
+// Detailed validation is handled by the use case layer.
 func (r *RegisterUserRequest) Validate() error {
 	if r.Name == "" {
-		return errors.New("name is required")
+		return domain.ErrNameRequired
 	}
 	if r.Email == "" {
-		return errors.New("email is required")
+		return domain.ErrEmailRequired
 	}
 	if r.Password == "" {
-		return errors.New("password is required")
+		return domain.ErrPasswordRequired
 	}
 	return nil
 }
