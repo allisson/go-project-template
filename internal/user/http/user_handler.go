@@ -2,32 +2,23 @@
 package http
 
 import (
-	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 
 	"github.com/allisson/go-project-template/internal/httputil"
-	"github.com/allisson/go-project-template/internal/user/domain"
 	"github.com/allisson/go-project-template/internal/user/http/dto"
 	"github.com/allisson/go-project-template/internal/user/usecase"
 )
 
-// UserUseCaseInterface defines the interface for user use case operations
-type UserUseCaseInterface interface {
-	RegisterUser(ctx context.Context, input usecase.RegisterUserInput) (*domain.User, error)
-	GetUserByEmail(ctx context.Context, email string) (*domain.User, error)
-	GetUserByID(ctx context.Context, id int64) (*domain.User, error)
-}
-
 // UserHandler handles user-related HTTP requests
 type UserHandler struct {
-	userUseCase UserUseCaseInterface
+	userUseCase usecase.UseCase
 	logger      *slog.Logger
 }
 
 // NewUserHandler creates a new UserHandler
-func NewUserHandler(userUseCase UserUseCaseInterface, logger *slog.Logger) *UserHandler {
+func NewUserHandler(userUseCase usecase.UseCase, logger *slog.Logger) *UserHandler {
 	return &UserHandler{
 		userUseCase: userUseCase,
 		logger:      logger,

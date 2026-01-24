@@ -24,7 +24,7 @@ func NewServer(
 	host string,
 	port int,
 	logger *slog.Logger,
-	userUseCaseInstance *userUsecase.UserUseCase,
+	userUseCaseInstance userUsecase.UseCase,
 ) *Server {
 	userHandler := userHttp.NewUserHandler(userUseCaseInstance, logger)
 

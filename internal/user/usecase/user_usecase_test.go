@@ -88,7 +88,6 @@ func TestNewUserUseCase(t *testing.T) {
 	useCase, err := NewUserUseCase(txManager, userRepo, outboxRepo)
 	require.NoError(t, err)
 	assert.NotNil(t, useCase)
-	assert.NotNil(t, useCase.passwordHasher)
 }
 
 func TestUserUseCase_RegisterUser_Success(t *testing.T) {

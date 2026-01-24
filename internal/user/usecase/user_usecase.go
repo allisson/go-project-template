@@ -19,6 +19,13 @@ type RegisterUserInput struct {
 	Password string `json:"password"`
 }
 
+// UseCase defines the interface for user business logic operations
+type UseCase interface {
+	RegisterUser(ctx context.Context, input RegisterUserInput) (*domain.User, error)
+	GetUserByEmail(ctx context.Context, email string) (*domain.User, error)
+	GetUserByID(ctx context.Context, id int64) (*domain.User, error)
+}
+
 // UserRepository interface defines user repository operations
 type UserRepository interface {
 	Create(ctx context.Context, user *domain.User) error
@@ -46,7 +53,7 @@ func NewUserUseCase(
 	txManager database.TxManager,
 	userRepo UserRepository,
 	outboxRepo OutboxEventRepository,
-) (*UserUseCase, error) {
+) (UseCase, error) {
 	// Initialize password hasher with interactive policy for user passwords
 	hasher, err := pwdhash.New(pwdhash.WithPolicy(pwdhash.PolicyInteractive))
 	if err != nil {
