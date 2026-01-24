@@ -10,13 +10,14 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/allisson/go-project-template/internal/app"
-	"github.com/allisson/go-project-template/internal/config"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/urfave/cli/v3"
+
+	"github.com/allisson/go-project-template/internal/app"
+	"github.com/allisson/go-project-template/internal/config"
 )
 
 // closeContainer closes all resources in the container and logs any errors.
@@ -30,7 +31,11 @@ func closeContainer(container *app.Container, logger *slog.Logger) {
 func closeMigrate(migrate *migrate.Migrate, logger *slog.Logger) {
 	sourceError, databaseError := migrate.Close()
 	if sourceError != nil || databaseError != nil {
-		logger.Error("failed to close the migrate", slog.Any("source_error", sourceError), slog.Any("database_error", databaseError))
+		logger.Error(
+			"failed to close the migrate",
+			slog.Any("source_error", sourceError),
+			slog.Any("database_error", databaseError),
+		)
 	}
 }
 

@@ -65,10 +65,14 @@ Container
 ├── TxManager
 │   └── depends on: Database
 ├── Repositories
-│   ├── UserRepository
-│   │   └── depends on: Database, Config.DBDriver
-│   └── OutboxRepository
-│       └── depends on: Database, Config.DBDriver
+│   ├── UserRepository (interface from usecase package)
+│   │   ├── MySQLUserRepository (concrete implementation)
+│   │   ├── PostgreSQLUserRepository (concrete implementation)
+│   │   └── depends on: Database
+│   └── OutboxRepository (interface from usecase package)
+│       ├── MySQLOutboxEventRepository (concrete implementation)
+│       ├── PostgreSQLOutboxEventRepository (concrete implementation)
+│       └── depends on: Database
 ├── Use Cases
 │   └── UserUseCase
 │       ├── depends on: TxManager
@@ -225,18 +229,21 @@ func (c *Container) OrderUseCase() (*orderUsecase.OrderUseCase, error) {
 ### 3. Add initialization method
 
 ```go
-func (c *Container) initOrderUseCase() (*orderUsecase.OrderUseCase, error) {
-    txManager, err := c.TxManager()
+func (c *Container) initProductRepository() (productUsecase.ProductRepository, error) {
+    db, err := c.DB()
     if err != nil {
-        return nil, fmt.Errorf("failed to get tx manager: %w", err)
+        return nil, fmt.Errorf("failed to get database: %w", err)
     }
-
-    orderRepo, err := c.OrderRepository()
-    if err != nil {
-        return nil, fmt.Errorf("failed to get order repository: %w", err)
+    
+    // Select the appropriate repository based on the database driver
+    switch c.config.DBDriver {
+    case "mysql":
+        return productRepository.NewMySQLProductRepository(db), nil
+    case "postgres":
+        return productRepository.NewPostgreSQLProductRepository(db), nil
+    default:
+        return nil, fmt.Errorf("unsupported database driver: %s", c.config.DBDriver)
     }
-
-    return orderUsecase.NewOrderUseCase(txManager, orderRepo), nil
 }
 ```
 
@@ -253,8 +260,24 @@ The `main.go` file is significantly simpler and focused on application flow rath
 // 60+ lines of manual dependency wiring
 db, err := database.Connect(...)
 txManager := database.NewTxManager(db)
-userRepo := userRepository.NewUserRepository(db, cfg.DBDriver)
-outboxRepo := outboxRepository.NewOutboxEventRepository(db, cfg.DBDriver)
+
+// Determine which repository to use
+var userRepo userUsecase.UserRepository
+switch cfg.DBDriver {
+case "mysql":
+    userRepo = userRepository.NewMySQLUserRepository(db)
+case "postgres":
+    userRepo = userRepository.NewPostgreSQLUserRepository(db)
+}
+
+var outboxRepo userUsecase.OutboxEventRepository
+switch cfg.DBDriver {
+case "mysql":
+    outboxRepo = outboxRepository.NewMySQLOutboxEventRepository(db)
+case "postgres":
+    outboxRepo = outboxRepository.NewPostgreSQLOutboxEventRepository(db)
+}
+
 userUseCase, err := userUsecase.NewUserUseCase(txManager, userRepo, outboxRepo)
 server := http.NewServer(cfg.ServerHost, cfg.ServerPort, logger, userUseCase)
 ```

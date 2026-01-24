@@ -4,12 +4,18 @@ package database
 import (
 	"context"
 	"database/sql"
-
-	"github.com/allisson/sqlutil"
 )
 
 // txKey is a context key type for storing database transactions.
 type txKey struct{}
+
+// Querier is an interface that represents a database query executor.
+// It can be either *sql.DB or *sql.Tx
+type Querier interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
 
 // TxManager manages database transactions
 type TxManager interface {
@@ -46,7 +52,7 @@ func (m *sqlTxManager) WithTx(ctx context.Context, fn func(ctx context.Context) 
 }
 
 // GetTx retrieves a transaction from context, or falls back to the DB connection
-func GetTx(ctx context.Context, db *sql.DB) sqlutil.Querier {
+func GetTx(ctx context.Context, db *sql.DB) Querier {
 	if tx, ok := ctx.Value(txKey{}).(*sql.Tx); ok {
 		return tx
 	}

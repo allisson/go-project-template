@@ -22,7 +22,11 @@ func TestLoad(t *testing.T) {
 				assert.Equal(t, "0.0.0.0", cfg.ServerHost)
 				assert.Equal(t, 8080, cfg.ServerPort)
 				assert.Equal(t, "postgres", cfg.DBDriver)
-				assert.Equal(t, "postgres://user:password@localhost:5432/mydb?sslmode=disable", cfg.DBConnectionString)
+				assert.Equal(
+					t,
+					"postgres://user:password@localhost:5432/mydb?sslmode=disable",
+					cfg.DBConnectionString,
+				)
 				assert.Equal(t, 25, cfg.DBMaxOpenConnections)
 				assert.Equal(t, 5, cfg.DBMaxIdleConnections)
 				assert.Equal(t, 5*time.Minute, cfg.DBConnMaxLifetime)

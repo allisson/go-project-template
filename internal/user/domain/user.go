@@ -4,16 +4,17 @@ package domain
 import (
 	"time"
 
-	"github.com/allisson/go-project-template/internal/errors"
 	"github.com/google/uuid"
+
+	"github.com/allisson/go-project-template/internal/errors"
 )
 
 // User represents a user in the system
 type User struct {
 	ID        uuid.UUID `db:"id"`
-	Name      string    `db:"name" fieldtag:"insert,update"`
-	Email     string    `db:"email" fieldtag:"insert,update"`
-	Password  string    `db:"password" fieldtag:"insert,update"`
+	Name      string    `db:"name"       fieldtag:"insert,update"`
+	Email     string    `db:"email"      fieldtag:"insert,update"`
+	Password  string    `db:"password"   fieldtag:"insert,update"`
 	CreatedAt time.Time `db:"created_at"`
 	UpdatedAt time.Time `db:"updated_at"`
 }

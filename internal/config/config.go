@@ -46,8 +46,11 @@ func Load() *Config {
 		ServerPort: env.GetInt("SERVER_PORT", 8080),
 
 		// Database configuration
-		DBDriver:             env.GetString("DB_DRIVER", "postgres"),
-		DBConnectionString:   env.GetString("DB_CONNECTION_STRING", "postgres://user:password@localhost:5432/mydb?sslmode=disable"),
+		DBDriver: env.GetString("DB_DRIVER", "postgres"),
+		DBConnectionString: env.GetString(
+			"DB_CONNECTION_STRING",
+			"postgres://user:password@localhost:5432/mydb?sslmode=disable",
+		),
 		DBMaxOpenConnections: env.GetInt("DB_MAX_OPEN_CONNECTIONS", 25),
 		DBMaxIdleConnections: env.GetInt("DB_MAX_IDLE_CONNECTIONS", 5),
 		DBConnMaxLifetime:    env.GetDuration("DB_CONN_MAX_LIFETIME", 5, time.Minute),

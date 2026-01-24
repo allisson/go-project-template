@@ -47,7 +47,11 @@ func RecoveryMiddleware(logger *slog.Logger) Middleware {
 						slog.String("method", r.Method),
 					)
 
-					httputil.MakeJSONResponse(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+					httputil.MakeJSONResponse(
+						w,
+						http.StatusInternalServerError,
+						map[string]string{"error": "internal server error"},
+					)
 				}
 			}()
 
@@ -91,7 +95,11 @@ func ReadinessHandler(ctx context.Context) http.Handler {
 		// Check if context is cancelled (application is shutting down)
 		select {
 		case <-ctx.Done():
-			httputil.MakeJSONResponse(w, http.StatusServiceUnavailable, map[string]string{"status": "not ready"})
+			httputil.MakeJSONResponse(
+				w,
+				http.StatusServiceUnavailable,
+				map[string]string{"status": "not ready"},
+			)
 			return
 		default:
 		}

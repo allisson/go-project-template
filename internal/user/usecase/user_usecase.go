@@ -8,13 +8,14 @@ import (
 
 	validation "github.com/jellydator/validation"
 
+	"github.com/allisson/go-pwdhash"
+	"github.com/google/uuid"
+
 	"github.com/allisson/go-project-template/internal/database"
 	apperrors "github.com/allisson/go-project-template/internal/errors"
 	outboxDomain "github.com/allisson/go-project-template/internal/outbox/domain"
 	"github.com/allisson/go-project-template/internal/user/domain"
 	appValidation "github.com/allisson/go-project-template/internal/validation"
-	"github.com/allisson/go-pwdhash"
-	"github.com/google/uuid"
 )
 
 // RegisterUserInput contains the input data for user registration

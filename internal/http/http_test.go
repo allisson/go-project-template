@@ -11,15 +11,16 @@ import (
 	"os"
 	"testing"
 
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/allisson/go-project-template/internal/httputil"
 	userDomain "github.com/allisson/go-project-template/internal/user/domain"
 	userHttp "github.com/allisson/go-project-template/internal/user/http"
 	"github.com/allisson/go-project-template/internal/user/http/dto"
 	userUsecase "github.com/allisson/go-project-template/internal/user/usecase"
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 // MockUserUseCase is a mock implementation of usecase.UserUseCase
@@ -27,7 +28,10 @@ type MockUserUseCase struct {
 	mock.Mock
 }
 
-func (m *MockUserUseCase) RegisterUser(ctx context.Context, input userUsecase.RegisterUserInput) (*userDomain.User, error) {
+func (m *MockUserUseCase) RegisterUser(
+	ctx context.Context,
+	input userUsecase.RegisterUserInput,
+) (*userDomain.User, error) {
 	args := m.Called(ctx, input)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)

@@ -7,57 +7,42 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	apperrors "github.com/allisson/go-project-template/internal/errors"
-	"github.com/allisson/go-project-template/internal/user/domain"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	apperrors "github.com/allisson/go-project-template/internal/errors"
+	"github.com/allisson/go-project-template/internal/user/domain"
 )
 
-func TestNewUserRepository(t *testing.T) {
+func TestNewPostgreSQLUserRepository(t *testing.T) {
 	db, _, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close() //nolint:errcheck
 
-	tests := []struct {
-		name   string
-		driver string
-	}{
-		{
-			name:   "create repository with postgres driver",
-			driver: "postgres",
-		},
-		{
-			name:   "create repository with mysql driver",
-			driver: "mysql",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			repo := NewUserRepository(db, tt.driver)
-			assert.NotNil(t, repo)
-			assert.Equal(t, db, repo.db)
-		})
-	}
+	repo := NewPostgreSQLUserRepository(db)
+	assert.NotNil(t, repo)
+	assert.Equal(t, db, repo.db)
 }
 
-func TestUserRepository_Create(t *testing.T) {
+func TestPostgreSQLUserRepository_Create(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close() //nolint:errcheck
 
-	repo := NewUserRepository(db, "postgres")
+	repo := NewPostgreSQLUserRepository(db)
 	ctx := context.Background()
 
+	uuid1 := uuid.Must(uuid.NewV7())
 	user := &domain.User{
+		ID:       uuid1,
 		Name:     "John Doe",
 		Email:    "john@example.com",
 		Password: "hashed_password",
 	}
 
 	mock.ExpectExec("INSERT INTO users").
-		WithArgs(user.Name, user.Email, user.Password).
+		WithArgs(user.ID, user.Name, user.Email, user.Password).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	err = repo.Create(ctx, user)
@@ -65,12 +50,12 @@ func TestUserRepository_Create(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestUserRepository_GetByID(t *testing.T) {
+func TestPostgreSQLUserRepository_GetByID(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close() //nolint:errcheck
 
-	repo := NewUserRepository(db, "postgres")
+	repo := NewPostgreSQLUserRepository(db)
 	ctx := context.Background()
 
 	uuid1 := uuid.Must(uuid.NewV7())
@@ -99,12 +84,12 @@ func TestUserRepository_GetByID(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestUserRepository_GetByID_NotFound(t *testing.T) {
+func TestPostgreSQLUserRepository_GetByID_NotFound(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close() //nolint:errcheck
 
-	repo := NewUserRepository(db, "postgres")
+	repo := NewPostgreSQLUserRepository(db)
 	ctx := context.Background()
 
 	notFoundUUID := uuid.Must(uuid.NewV7())
@@ -119,12 +104,12 @@ func TestUserRepository_GetByID_NotFound(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestUserRepository_GetByEmail(t *testing.T) {
+func TestPostgreSQLUserRepository_GetByEmail(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close() //nolint:errcheck
 
-	repo := NewUserRepository(db, "postgres")
+	repo := NewPostgreSQLUserRepository(db)
 	ctx := context.Background()
 
 	uuid1 := uuid.Must(uuid.NewV7())
@@ -152,12 +137,12 @@ func TestUserRepository_GetByEmail(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestUserRepository_GetByEmail_NotFound(t *testing.T) {
+func TestPostgreSQLUserRepository_GetByEmail_NotFound(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close() //nolint:errcheck
 
-	repo := NewUserRepository(db, "postgres")
+	repo := NewPostgreSQLUserRepository(db)
 	ctx := context.Background()
 
 	mock.ExpectQuery("SELECT (.+) FROM users").
