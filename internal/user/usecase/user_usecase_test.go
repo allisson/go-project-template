@@ -6,7 +6,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/allisson/go-project-template/internal/domain"
+	outboxDomain "github.com/allisson/go-project-template/internal/outbox/domain"
+	"github.com/allisson/go-project-template/internal/user/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -61,20 +62,20 @@ type MockOutboxEventRepository struct {
 	mock.Mock
 }
 
-func (m *MockOutboxEventRepository) Create(ctx context.Context, event *domain.OutboxEvent) error {
+func (m *MockOutboxEventRepository) Create(ctx context.Context, event *outboxDomain.OutboxEvent) error {
 	args := m.Called(ctx, event)
 	return args.Error(0)
 }
 
-func (m *MockOutboxEventRepository) GetPendingEvents(ctx context.Context, limit int) ([]*domain.OutboxEvent, error) {
+func (m *MockOutboxEventRepository) GetPendingEvents(ctx context.Context, limit int) ([]*outboxDomain.OutboxEvent, error) {
 	args := m.Called(ctx, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.OutboxEvent), args.Error(1)
+	return args.Get(0).([]*outboxDomain.OutboxEvent), args.Error(1)
 }
 
-func (m *MockOutboxEventRepository) Update(ctx context.Context, event *domain.OutboxEvent) error {
+func (m *MockOutboxEventRepository) Update(ctx context.Context, event *outboxDomain.OutboxEvent) error {
 	args := m.Called(ctx, event)
 	return args.Error(0)
 }
@@ -208,10 +209,10 @@ func TestUserUseCase_RegisterUser_VerifyOutboxPayload(t *testing.T) {
 	userRepo.On("Create", ctx, mock.AnythingOfType("*domain.User")).Return(nil)
 
 	// Capture the outbox event to verify its payload
-	var capturedEvent *domain.OutboxEvent
+	var capturedEvent *outboxDomain.OutboxEvent
 	outboxRepo.On("Create", ctx, mock.AnythingOfType("*domain.OutboxEvent")).
 		Run(func(args mock.Arguments) {
-			capturedEvent = args.Get(1).(*domain.OutboxEvent)
+			capturedEvent = args.Get(1).(*outboxDomain.OutboxEvent)
 		}).
 		Return(nil)
 
@@ -221,7 +222,7 @@ func TestUserUseCase_RegisterUser_VerifyOutboxPayload(t *testing.T) {
 	assert.NotNil(t, user)
 	assert.NotNil(t, capturedEvent)
 	assert.Equal(t, "user.created", capturedEvent.EventType)
-	assert.Equal(t, domain.OutboxEventStatusPending, capturedEvent.Status)
+	assert.Equal(t, outboxDomain.OutboxEventStatusPending, capturedEvent.Status)
 	assert.Equal(t, 0, capturedEvent.Retries)
 
 	// Verify payload structure

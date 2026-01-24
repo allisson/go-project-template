@@ -8,14 +8,15 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/allisson/go-project-template/internal/usecase"
+	userHttp "github.com/allisson/go-project-template/internal/user/http"
+	userUsecase "github.com/allisson/go-project-template/internal/user/usecase"
 )
 
 // Server represents the HTTP server
 type Server struct {
 	server      *http.Server
 	logger      *slog.Logger
-	userHandler *UserHandler
+	userHandler *userHttp.UserHandler
 }
 
 // NewServer creates a new HTTP server
@@ -23,9 +24,9 @@ func NewServer(
 	host string,
 	port int,
 	logger *slog.Logger,
-	userUseCase *usecase.UserUseCase,
+	userUseCaseInstance *userUsecase.UserUseCase,
 ) *Server {
-	userHandler := NewUserHandler(userUseCase, logger)
+	userHandler := userHttp.NewUserHandler(userUseCaseInstance, logger)
 
 	return &Server{
 		logger:      logger,

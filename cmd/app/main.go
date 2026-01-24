@@ -14,8 +14,9 @@ import (
 	"github.com/allisson/go-project-template/internal/config"
 	"github.com/allisson/go-project-template/internal/database"
 	"github.com/allisson/go-project-template/internal/http"
-	"github.com/allisson/go-project-template/internal/repository"
-	"github.com/allisson/go-project-template/internal/usecase"
+	outboxRepository "github.com/allisson/go-project-template/internal/outbox/repository"
+	userRepository "github.com/allisson/go-project-template/internal/user/repository"
+	userUsecase "github.com/allisson/go-project-template/internal/user/usecase"
 	"github.com/allisson/go-project-template/internal/worker"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/mysql"
@@ -99,16 +100,16 @@ func runServer(ctx context.Context) error {
 
 	// Initialize components
 	txManager := database.NewTxManager(db)
-	userRepo := repository.NewUserRepository(db, cfg.DBDriver)
-	outboxRepo := repository.NewOutboxEventRepository(db, cfg.DBDriver)
+	userRepo := userRepository.NewUserRepository(db, cfg.DBDriver)
+	outboxRepo := outboxRepository.NewOutboxEventRepository(db, cfg.DBDriver)
 
-	userUseCase, err := usecase.NewUserUseCase(txManager, userRepo, outboxRepo)
+	userUseCaseInstance, err := userUsecase.NewUserUseCase(txManager, userRepo, outboxRepo)
 	if err != nil {
 		return fmt.Errorf("failed to create user use case: %w", err)
 	}
 
 	// Create HTTP server
-	server := http.NewServer(cfg.ServerHost, cfg.ServerPort, logger, userUseCase)
+	server := http.NewServer(cfg.ServerHost, cfg.ServerPort, logger, userUseCaseInstance)
 
 	// Setup graceful shutdown
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
@@ -191,7 +192,7 @@ func runWorker(ctx context.Context) error {
 
 	// Initialize components
 	txManager := database.NewTxManager(db)
-	outboxRepo := repository.NewOutboxEventRepository(db, cfg.DBDriver)
+	outboxRepo := outboxRepository.NewOutboxEventRepository(db, cfg.DBDriver)
 
 	workerConfig := worker.Config{
 		Interval:      cfg.WorkerInterval,

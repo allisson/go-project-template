@@ -1,9 +1,10 @@
 # Go Project Template
 
-A production-ready Go project template following Clean Architecture principles, optimized for building scalable applications with PostgreSQL or MySQL.
+A production-ready Go project template following Clean Architecture and Domain-Driven Design principles, optimized for building scalable applications with PostgreSQL or MySQL.
 
 ## Features
 
+- **Modular Domain Architecture** - Domain-based code organization for scalability
 - **Clean Architecture** - Separation of concerns with domain, repository, use case, and presentation layers
 - **Multiple Database Support** - PostgreSQL and MySQL via unified repository layer
 - **Database Migrations** - Separate migrations for PostgreSQL and MySQL using golang-migrate
@@ -33,17 +34,24 @@ go-project-template/
 │   ├── database/               # Database connection and transaction management
 │   │   ├── database.go
 │   │   └── txmanager.go
-│   ├── domain/                 # Domain entities
-│   │   └── entities.go
-│   ├── http/                   # HTTP server and handlers
+│   ├── http/                   # HTTP server and shared infrastructure
 │   │   ├── middleware.go
-│   │   ├── server.go
-│   │   └── user_handler.go
-│   ├── repository/             # Data access layer
-│   │   ├── outbox_repository.go
-│   │   └── user_repository.go
-│   ├── usecase/                # Business logic
-│   │   └── user_usecase.go
+│   │   ├── response.go
+│   │   └── server.go
+│   ├── outbox/                 # Outbox domain module
+│   │   ├── domain/             # Outbox entities
+│   │   │   └── outbox_event.go
+│   │   └── repository/         # Outbox data access
+│   │       └── outbox_repository.go
+│   ├── user/                   # User domain module
+│   │   ├── domain/             # User entities
+│   │   │   └── user.go
+│   │   ├── http/               # User HTTP handlers
+│   │   │   └── user_handler.go
+│   │   ├── repository/         # User data access
+│   │   │   └── user_repository.go
+│   │   └── usecase/            # User business logic
+│   │       └── user_usecase.go
 │   └── worker/                 # Background workers
 │       └── event_worker.go
 ├── migrations/
@@ -57,6 +65,17 @@ go-project-template/
 ├── go.mod
 └── go.sum
 ```
+
+### Domain Module Structure
+
+The project follows a modular domain architecture where each business domain is organized in its own directory with clear separation of concerns:
+
+- **`domain/`** - Contains entities, value objects, and domain types
+- **`usecase/`** - Implements business logic and orchestrates operations
+- **`repository/`** - Handles data persistence and retrieval
+- **`http/`** - Contains HTTP handlers and request/response types
+
+This structure makes it easy to add new domains (e.g., `internal/product/`, `internal/order/`) without affecting existing modules.
 
 ## Prerequisites
 
@@ -297,12 +316,55 @@ make docker-run-migrate
 
 ## Architecture
 
+### Modular Domain Architecture
+
+The project follows a modular domain-driven structure where each business domain is self-contained:
+
+**User Domain** (`internal/user/`)
+- `domain/` - User entity and types
+- `usecase/` - User registration, authentication logic
+- `repository/` - User data persistence
+- `http/` - User HTTP endpoints and handlers
+
+**Outbox Domain** (`internal/outbox/`)
+- `domain/` - OutboxEvent entity and status types
+- `repository/` - Event persistence and retrieval
+
+**Shared Infrastructure**
+- `config/` - Application configuration
+- `database/` - Database connection and transaction management
+- `http/` - HTTP server, middleware, and shared utilities
+- `worker/` - Background event processing
+
+### Benefits of This Structure
+
+1. **Scalability** - Easy to add new domains without affecting existing code
+2. **Encapsulation** - Each domain is self-contained with clear boundaries
+3. **Team Collaboration** - Teams can work on different domains independently
+4. **Maintainability** - Related code is co-located, making it easier to understand and modify
+
+### Adding New Domains
+
+To add a new domain (e.g., `product`):
+
+```
+internal/product/
+├── domain/
+│   └── product.go
+├── usecase/
+│   └── product_usecase.go
+├── repository/
+│   └── product_repository.go
+└── http/
+    └── product_handler.go
+```
+
 ### Clean Architecture Layers
 
-1. **Domain Layer** (`internal/domain`) - Contains business entities and rules
-2. **Repository Layer** (`internal/repository`) - Data access implementations using sqlutil
-3. **Use Case Layer** (`internal/usecase`) - Application business logic
-4. **Presentation Layer** (`internal/http`) - HTTP handlers and server
+1. **Domain Layer** - Contains business entities and rules (e.g., `internal/user/domain`)
+2. **Repository Layer** - Data access implementations using sqlutil (e.g., `internal/user/repository`)
+3. **Use Case Layer** - Application business logic (e.g., `internal/user/usecase`)
+4. **Presentation Layer** - HTTP handlers and server (e.g., `internal/user/http`)
 
 ### Transaction Management
 

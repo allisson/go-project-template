@@ -1,17 +1,7 @@
-// Package domain defines the core domain entities and types for the application.
+// Package domain defines the core outbox domain entities and types.
 package domain
 
 import "time"
-
-// User represents a user in the system
-type User struct {
-	ID        int64     `db:"id" json:"id"`
-	Name      string    `db:"name" json:"name" fieldtag:"insert,update"`
-	Email     string    `db:"email" json:"email" fieldtag:"insert,update"`
-	Password  string    `db:"password" json:"-" fieldtag:"insert,update"`
-	CreatedAt time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
-}
 
 // OutboxEventStatus represents the status of an outbox event
 type OutboxEventStatus string

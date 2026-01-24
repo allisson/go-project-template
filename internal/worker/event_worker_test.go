@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/allisson/go-project-template/internal/domain"
+	"github.com/allisson/go-project-template/internal/outbox/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )

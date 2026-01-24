@@ -1,4 +1,4 @@
-// Package usecase implements the application's business logic and orchestrates domain operations.
+// Package usecase implements the user business logic and orchestrates user domain operations.
 package usecase
 
 import (
@@ -7,7 +7,8 @@ import (
 	"fmt"
 
 	"github.com/allisson/go-project-template/internal/database"
-	"github.com/allisson/go-project-template/internal/domain"
+	outboxDomain "github.com/allisson/go-project-template/internal/outbox/domain"
+	"github.com/allisson/go-project-template/internal/user/domain"
 	"github.com/allisson/go-pwdhash"
 )
 
@@ -27,9 +28,9 @@ type UserRepository interface {
 
 // OutboxEventRepository interface defines outbox event repository operations
 type OutboxEventRepository interface {
-	Create(ctx context.Context, event *domain.OutboxEvent) error
-	GetPendingEvents(ctx context.Context, limit int) ([]*domain.OutboxEvent, error)
-	Update(ctx context.Context, event *domain.OutboxEvent) error
+	Create(ctx context.Context, event *outboxDomain.OutboxEvent) error
+	GetPendingEvents(ctx context.Context, limit int) ([]*outboxDomain.OutboxEvent, error)
+	Update(ctx context.Context, event *outboxDomain.OutboxEvent) error
 }
 
 // UserUseCase handles user-related business logic
@@ -93,10 +94,10 @@ func (uc *UserUseCase) RegisterUser(ctx context.Context, input RegisterUserInput
 		}
 
 		// Create outbox event
-		outboxEvent := &domain.OutboxEvent{
+		outboxEvent := &outboxDomain.OutboxEvent{
 			EventType: "user.created",
 			Payload:   string(payloadJSON),
-			Status:    domain.OutboxEventStatusPending,
+			Status:    outboxDomain.OutboxEventStatusPending,
 			Retries:   0,
 		}
 

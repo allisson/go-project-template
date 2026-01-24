@@ -1,4 +1,4 @@
-// Package repository provides data persistence implementations for domain entities.
+// Package repository provides data persistence implementations for outbox entities.
 package repository
 
 import (
@@ -6,7 +6,7 @@ import (
 	"database/sql"
 
 	"github.com/allisson/go-project-template/internal/database"
-	"github.com/allisson/go-project-template/internal/domain"
+	"github.com/allisson/go-project-template/internal/outbox/domain"
 	"github.com/allisson/sqlutil"
 )
 

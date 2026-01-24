@@ -1,4 +1,4 @@
-// Package http provides HTTP server implementation and request handlers.
+// Package http provides HTTP handlers for user-related operations.
 package http
 
 import (
@@ -7,9 +7,18 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/allisson/go-project-template/internal/domain"
-	"github.com/allisson/go-project-template/internal/usecase"
+	"github.com/allisson/go-project-template/internal/user/domain"
+	"github.com/allisson/go-project-template/internal/user/usecase"
 )
+
+// makeJSONResponse writes a JSON response with the given status code and data
+func makeJSONResponse(w http.ResponseWriter, statusCode int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+	}
+}
 
 // UserUseCaseInterface defines the interface for user use case operations
 type UserUseCaseInterface interface {

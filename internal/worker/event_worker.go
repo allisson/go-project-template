@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/allisson/go-project-template/internal/database"
-	"github.com/allisson/go-project-template/internal/domain"
+	"github.com/allisson/go-project-template/internal/outbox/domain"
 )
 
 // Config holds worker configuration
