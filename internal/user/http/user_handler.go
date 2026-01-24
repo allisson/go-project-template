@@ -34,16 +34,13 @@ func (h *UserHandler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 
 	var req dto.RegisterUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		if h.logger != nil {
-			h.logger.Error("failed to decode request body", slog.Any("error", err))
-		}
-		httputil.MakeJSONResponse(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		httputil.HandleValidationError(w, err, h.logger)
 		return
 	}
 
-	// Validate request
+	// Validate request structure
 	if err := req.Validate(); err != nil {
-		httputil.MakeJSONResponse(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		httputil.HandleError(w, err, h.logger)
 		return
 	}
 
@@ -52,10 +49,7 @@ func (h *UserHandler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.userUseCase.RegisterUser(r.Context(), input)
 	if err != nil {
-		if h.logger != nil {
-			h.logger.Error("failed to register user", slog.Any("error", err))
-		}
-		httputil.MakeJSONResponse(w, http.StatusInternalServerError, map[string]string{"error": "failed to register user"})
+		httputil.HandleError(w, err, h.logger)
 		return
 	}
 

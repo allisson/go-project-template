@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	apperrors "github.com/allisson/go-project-template/internal/errors"
 	"github.com/allisson/go-project-template/internal/user/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -111,7 +112,7 @@ func TestUserRepository_GetByID_NotFound(t *testing.T) {
 	user, err := repo.GetByID(ctx, 999)
 	assert.Error(t, err)
 	assert.Nil(t, user)
-	assert.Contains(t, err.Error(), "sql: no rows in result set")
+	assert.True(t, apperrors.Is(err, domain.ErrUserNotFound))
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -162,6 +163,6 @@ func TestUserRepository_GetByEmail_NotFound(t *testing.T) {
 	user, err := repo.GetByEmail(ctx, "notfound@example.com")
 	assert.Error(t, err)
 	assert.Nil(t, user)
-	assert.Contains(t, err.Error(), "sql: no rows in result set")
+	assert.True(t, apperrors.Is(err, domain.ErrUserNotFound))
 	assert.NoError(t, mock.ExpectationsWereMet())
 }

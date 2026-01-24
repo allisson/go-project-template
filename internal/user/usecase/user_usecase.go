@@ -4,9 +4,10 @@ package usecase
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"strings"
 
 	"github.com/allisson/go-project-template/internal/database"
+	apperrors "github.com/allisson/go-project-template/internal/errors"
 	outboxDomain "github.com/allisson/go-project-template/internal/outbox/domain"
 	"github.com/allisson/go-project-template/internal/user/domain"
 	"github.com/allisson/go-pwdhash"
@@ -57,7 +58,7 @@ func NewUserUseCase(
 	// Initialize password hasher with interactive policy for user passwords
 	hasher, err := pwdhash.New(pwdhash.WithPolicy(pwdhash.PolicyInteractive))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create password hasher: %w", err)
+		return nil, apperrors.Wrap(err, "failed to create password hasher")
 	}
 
 	return &UserUseCase{
@@ -68,25 +69,48 @@ func NewUserUseCase(
 	}, nil
 }
 
+// validateRegisterUserInput validates the registration input
+func (uc *UserUseCase) validateRegisterUserInput(input RegisterUserInput) error {
+	if strings.TrimSpace(input.Name) == "" {
+		return domain.ErrNameRequired
+	}
+	if strings.TrimSpace(input.Email) == "" {
+		return domain.ErrEmailRequired
+	}
+	if input.Password == "" {
+		return domain.ErrPasswordRequired
+	}
+	// Basic email validation
+	if !strings.Contains(input.Email, "@") || !strings.Contains(input.Email, ".") {
+		return domain.ErrInvalidEmail
+	}
+	return nil
+}
+
 // RegisterUser registers a new user and creates a user.created event
 func (uc *UserUseCase) RegisterUser(ctx context.Context, input RegisterUserInput) (*domain.User, error) {
+	// Validate input
+	if err := uc.validateRegisterUserInput(input); err != nil {
+		return nil, err
+	}
+
 	// Hash the password
 	hashedPassword, err := uc.passwordHasher.Hash([]byte(input.Password))
 	if err != nil {
-		return nil, fmt.Errorf("failed to hash password: %w", err)
+		return nil, apperrors.Wrap(err, "failed to hash password")
 	}
 
 	user := &domain.User{
-		Name:     input.Name,
-		Email:    input.Email,
+		Name:     strings.TrimSpace(input.Name),
+		Email:    strings.TrimSpace(strings.ToLower(input.Email)),
 		Password: hashedPassword,
 	}
 
 	// Execute within a transaction
 	err = uc.txManager.WithTx(ctx, func(ctx context.Context) error {
-		// Create user
+		// Create user - repository will return domain errors
 		if err := uc.userRepo.Create(ctx, user); err != nil {
-			return fmt.Errorf("failed to create user: %w", err)
+			return err
 		}
 
 		// Create user.created event payload
@@ -97,7 +121,7 @@ func (uc *UserUseCase) RegisterUser(ctx context.Context, input RegisterUserInput
 		}
 		payloadJSON, err := json.Marshal(eventPayload)
 		if err != nil {
-			return fmt.Errorf("failed to marshal event payload: %w", err)
+			return apperrors.Wrap(err, "failed to marshal event payload")
 		}
 
 		// Create outbox event
@@ -109,7 +133,7 @@ func (uc *UserUseCase) RegisterUser(ctx context.Context, input RegisterUserInput
 		}
 
 		if err := uc.outboxRepo.Create(ctx, outboxEvent); err != nil {
-			return fmt.Errorf("failed to create outbox event: %w", err)
+			return apperrors.Wrap(err, "failed to create outbox event")
 		}
 
 		return nil

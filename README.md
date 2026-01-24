@@ -6,6 +6,7 @@ A production-ready Go project template following Clean Architecture and Domain-D
 
 - **Modular Domain Architecture** - Domain-based code organization for scalability
 - **Clean Architecture** - Separation of concerns with domain, repository, use case, and presentation layers
+- **Standardized Error Handling** - Domain errors with proper HTTP status code mapping
 - **Dependency Injection Container** - Centralized component wiring with lazy initialization and clean resource management
 - **Multiple Database Support** - PostgreSQL and MySQL via unified repository layer
 - **Database Migrations** - Separate migrations for PostgreSQL and MySQL using golang-migrate
@@ -39,19 +40,21 @@ go-project-template/
 │   ├── database/               # Database connection and transaction management
 │   │   ├── database.go
 │   │   └── txmanager.go
+│   ├── errors/                 # Standardized domain errors
+│   │   └── errors.go
 │   ├── http/                   # HTTP server and shared infrastructure
 │   │   ├── middleware.go
 │   │   ├── response.go
 │   │   └── server.go
 │   ├── httputil/               # HTTP utility functions
-│   │   └── response.go
+│   │   └── response.go         # JSON responses and error mapping
 │   ├── outbox/                 # Outbox domain module
 │   │   ├── domain/             # Outbox entities
 │   │   │   └── outbox_event.go
 │   │   └── repository/         # Outbox data access
 │   │       └── outbox_repository.go
 │   ├── user/                   # User domain module
-│   │   ├── domain/             # User entities
+│   │   ├── domain/             # User entities and domain errors
 │   │   │   └── user.go
 │   │   ├── http/               # User HTTP handlers
 │   │   │   ├── dto/            # Request/response DTOs
@@ -81,16 +84,17 @@ go-project-template/
 
 The project follows a modular domain architecture where each business domain is organized in its own directory with clear separation of concerns:
 
-- **`domain/`** - Contains entities, value objects, and domain types (pure internal representation)
+- **`domain/`** - Contains entities, value objects, domain types, and domain-specific errors
 - **`usecase/`** - Defines UseCase interfaces and implements business logic and orchestration
-- **`repository/`** - Handles data persistence and retrieval
+- **`repository/`** - Handles data persistence and retrieval, transforms infrastructure errors to domain errors
 - **`http/`** - Contains HTTP handlers and DTOs (Data Transfer Objects)
   - **`dto/`** - Request/response DTOs and mappers (API contracts)
 
 ### Shared Utilities
 
 - **`app/`** - Dependency injection container for assembling application components
-- **`httputil/`** - Shared HTTP utility functions used across all domain modules (e.g., `MakeJSONResponse`)
+- **`errors/`** - Standardized domain errors for expressing business intent
+- **`httputil/`** - Shared HTTP utility functions including error mapping and JSON responses
 - **`config/`** - Application-wide configuration
 - **`database/`** - Database connection and transaction management
 - **`worker/`** - Background processing infrastructure
@@ -276,6 +280,119 @@ The binary supports three commands via urfave/cli:
 ./bin/app worker
 ```
 
+## Error Handling
+
+The project implements a standardized error handling system that expresses business intent rather than exposing infrastructure details.
+
+### Domain Error Architecture
+
+**Standard Domain Errors** (`internal/errors/errors.go`)
+
+The project defines standard domain errors that can be used across all modules:
+
+```go
+var (
+    ErrNotFound      = errors.New("not found")          // 404 Not Found
+    ErrConflict      = errors.New("conflict")           // 409 Conflict
+    ErrInvalidInput  = errors.New("invalid input")      // 422 Unprocessable Entity
+    ErrUnauthorized  = errors.New("unauthorized")       // 401 Unauthorized
+    ErrForbidden     = errors.New("forbidden")          // 403 Forbidden
+)
+```
+
+**Domain-Specific Errors** (`internal/user/domain/user.go`)
+
+Each domain defines its own specific errors that wrap the standard errors:
+
+```go
+var (
+    ErrUserNotFound      = errors.Wrap(errors.ErrNotFound, "user not found")
+    ErrUserAlreadyExists = errors.Wrap(errors.ErrConflict, "user already exists")
+    ErrInvalidEmail      = errors.Wrap(errors.ErrInvalidInput, "invalid email format")
+)
+```
+
+### Error Flow Through Layers
+
+**1. Repository Layer** - Transforms infrastructure errors to domain errors:
+
+```go
+func (r *UserRepository) GetByID(ctx context.Context, id int64) (*domain.User, error) {
+    if err := sqlutil.Get(ctx, querier, "users", opts, &user); err != nil {
+        if errors.Is(err, sql.ErrNoRows) {
+            return nil, domain.ErrUserNotFound  // Infrastructure → Domain
+        }
+        return nil, apperrors.Wrap(err, "failed to get user by id")
+    }
+    return &user, nil
+}
+```
+
+**2. Use Case Layer** - Returns domain errors directly:
+
+```go
+func (uc *UserUseCase) RegisterUser(ctx context.Context, input RegisterUserInput) (*domain.User, error) {
+    if strings.TrimSpace(input.Email) == "" {
+        return nil, domain.ErrEmailRequired  // Domain error
+    }
+    
+    if err := uc.userRepo.Create(ctx, user); err != nil {
+        return nil, err  // Pass through domain errors
+    }
+    return user, nil
+}
+```
+
+**3. HTTP Handler Layer** - Maps domain errors to HTTP responses:
+
+```go
+func (h *UserHandler) RegisterUser(w http.ResponseWriter, r *http.Request) {
+    user, err := h.userUseCase.RegisterUser(r.Context(), input)
+    if err != nil {
+        httputil.HandleError(w, err, h.logger)  // Auto-maps to HTTP status
+        return
+    }
+    httputil.MakeJSONResponse(w, http.StatusCreated, response)
+}
+```
+
+### HTTP Error Responses
+
+The `httputil.HandleError` function automatically maps domain errors to appropriate HTTP status codes:
+
+| Domain Error | HTTP Status | Error Code | Example Response |
+|--------------|-------------|------------|------------------|
+| `ErrNotFound` | 404 | `not_found` | `{"error":"not_found","message":"The requested resource was not found"}` |
+| `ErrConflict` | 409 | `conflict` | `{"error":"conflict","message":"A conflict occurred with existing data"}` |
+| `ErrInvalidInput` | 422 | `invalid_input` | `{"error":"invalid_input","message":"invalid email format"}` |
+| `ErrUnauthorized` | 401 | `unauthorized` | `{"error":"unauthorized","message":"Authentication is required"}` |
+| `ErrForbidden` | 403 | `forbidden` | `{"error":"forbidden","message":"You don't have permission"}` |
+| Unknown | 500 | `internal_error` | `{"error":"internal_error","message":"An internal error occurred"}` |
+
+### Benefits
+
+1. **No Infrastructure Leaks** - Database errors are never exposed to API clients
+2. **Business Intent** - Errors express domain concepts (`ErrUserNotFound` vs `sql.ErrNoRows`)
+3. **Consistent HTTP Mapping** - Same domain error always maps to same HTTP status
+4. **Type-Safe** - Use `errors.Is()` to check for specific error types
+5. **Structured Responses** - All errors return consistent JSON format
+6. **Centralized Logging** - All errors are logged with full context before responding
+
+### Adding Errors to New Domains
+
+When creating a new domain, define domain-specific errors:
+
+```go
+// internal/product/domain/product.go
+var (
+    ErrProductNotFound    = errors.Wrap(errors.ErrNotFound, "product not found")
+    ErrInsufficientStock  = errors.Wrap(errors.ErrConflict, "insufficient stock")
+    ErrInvalidPrice       = errors.Wrap(errors.ErrInvalidInput, "invalid price")
+)
+```
+
+Then use `httputil.HandleError()` in your HTTP handlers for automatic mapping.
+
 ## Development
 
 ### Build the application
@@ -393,8 +510,9 @@ The project follows a modular domain-driven structure where each business domain
 - `app/` - Dependency injection container for component assembly
 - `config/` - Application configuration
 - `database/` - Database connection and transaction management
+- `errors/` - Standardized domain errors (ErrNotFound, ErrConflict, etc.)
 - `http/` - HTTP server, middleware, and shared utilities
-- `httputil/` - Reusable HTTP utilities (JSON responses, error handling)
+- `httputil/` - Reusable HTTP utilities (JSON responses, error handling, status code mapping)
 - `worker/` - Background event processing
 
 ### Benefits of This Structure
@@ -414,17 +532,45 @@ To add a new domain (e.g., `product`):
 ```
 internal/product/
 ├── domain/
-│   └── product.go              # Domain entity (no JSON tags)
+│   └── product.go              # Domain entity + domain errors
 ├── usecase/
 │   └── product_usecase.go      # UseCase interface + business logic
 ├── repository/
-│   └── product_repository.go   # Data access
+│   └── product_repository.go   # Data access (returns domain errors)
 └── http/
     ├── dto/
     │   ├── request.go          # API request DTOs
     │   ├── response.go         # API response DTOs
     │   └── mapper.go           # DTO-to-domain mappers
-    └── product_handler.go      # HTTP handlers
+    └── product_handler.go      # HTTP handlers (uses httputil.HandleError)
+```
+
+**Define domain errors in your entity file:**
+
+```go
+// internal/product/domain/product.go
+package domain
+
+import (
+    "time"
+    apperrors "github.com/yourname/yourproject/internal/errors"
+)
+
+type Product struct {
+    ID          int64
+    Name        string
+    Price       float64
+    Stock       int
+    CreatedAt   time.Time
+    UpdatedAt   time.Time
+}
+
+// Domain-specific errors
+var (
+    ErrProductNotFound    = apperrors.Wrap(apperrors.ErrNotFound, "product not found")
+    ErrInsufficientStock  = apperrors.Wrap(apperrors.ErrConflict, "insufficient stock")
+    ErrInvalidPrice       = apperrors.Wrap(apperrors.ErrInvalidInput, "invalid price")
+)
 ```
 
 #### 2. Register in DI container
@@ -501,7 +647,11 @@ mux.HandleFunc("/api/products", productHandler.HandleProducts)
 
 **Tips:**
 - Define a UseCase interface in your usecase package to enable dependency inversion
-- Use the shared `httputil.MakeJSONResponse` function in your HTTP handlers for consistent JSON responses
+- Define domain-specific errors in your domain package by wrapping standard errors
+- Repository layer should transform infrastructure errors (like `sql.ErrNoRows`) to domain errors
+- Use case layer should return domain errors directly without additional wrapping
+- Use `httputil.HandleError()` in HTTP handlers for automatic error-to-HTTP status mapping
+- Use the shared `httputil.MakeJSONResponse` function for consistent JSON responses
 - Keep domain models free of JSON tags - use DTOs for API serialization
 - Implement validation in your request DTOs
 - Create mapper functions to convert between DTOs and domain models
@@ -510,13 +660,15 @@ mux.HandleFunc("/api/products", productHandler.HandleProducts)
 
 ### Clean Architecture Layers
 
-1. **Domain Layer** - Contains business entities and rules (e.g., `internal/user/domain`)
-2. **Repository Layer** - Data access implementations using sqlutil (e.g., `internal/user/repository`)
-3. **Use Case Layer** - UseCase interfaces and application business logic (e.g., `internal/user/usecase`)
-4. **Presentation Layer** - HTTP handlers and server (e.g., `internal/user/http`)
-5. **Utility Layer** - Shared utilities and helpers (e.g., `internal/httputil`)
+1. **Domain Layer** - Contains business entities, domain errors, and rules (e.g., `internal/user/domain`)
+2. **Repository Layer** - Data access implementations using sqlutil; transforms infrastructure errors to domain errors (e.g., `internal/user/repository`)
+3. **Use Case Layer** - UseCase interfaces and application business logic; returns domain errors (e.g., `internal/user/usecase`)
+4. **Presentation Layer** - HTTP handlers that map domain errors to HTTP responses (e.g., `internal/user/http`)
+5. **Utility Layer** - Shared utilities including error handling and mapping (e.g., `internal/httputil`, `internal/errors`)
 
 **Dependency Inversion Principle:** The presentation layer (HTTP handlers) and infrastructure (DI container) depend on UseCase interfaces defined in the usecase layer, not on concrete implementations. This enables better testability and decoupling.
+
+**Error Flow:** Errors flow from repository → use case → handler, where they are transformed from infrastructure concerns to domain concepts, and finally to appropriate HTTP responses.
 
 ### Data Transfer Objects (DTOs)
 
@@ -609,9 +761,7 @@ import "github.com/allisson/go-project-template/internal/httputil"
 func (h *ProductHandler) GetProduct(w http.ResponseWriter, r *http.Request) {
     product, err := h.productUseCase.GetProduct(r.Context(), productID)
     if err != nil {
-        httputil.MakeJSONResponse(w, http.StatusNotFound, map[string]string{
-            "error": "product not found",
-        })
+        httputil.HandleError(w, err, h.logger)
         return
     }
     
@@ -619,7 +769,31 @@ func (h *ProductHandler) GetProduct(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-This ensures consistent response formatting across all HTTP endpoints and eliminates code duplication.
+**HandleError** - Automatic domain error to HTTP status code mapping:
+
+```go
+func (h *UserHandler) RegisterUser(w http.ResponseWriter, r *http.Request) {
+    user, err := h.userUseCase.RegisterUser(r.Context(), input)
+    if err != nil {
+        // Automatically maps domain errors to appropriate HTTP status codes
+        // ErrNotFound → 404, ErrConflict → 409, ErrInvalidInput → 422, etc.
+        httputil.HandleError(w, err, h.logger)
+        return
+    }
+    httputil.MakeJSONResponse(w, http.StatusCreated, response)
+}
+```
+
+**HandleValidationError** - For JSON decode and validation errors:
+
+```go
+if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+    httputil.HandleValidationError(w, err, h.logger)  // Returns 400 Bad Request
+    return
+}
+```
+
+These utilities ensure consistent response formatting and error handling across all HTTP endpoints.
 
 ### Transactional Outbox Pattern
 

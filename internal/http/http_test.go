@@ -288,7 +288,7 @@ func TestUserHandler_Register_InvalidJSON(t *testing.T) {
 	var response map[string]string
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.Contains(t, response["error"], "invalid request body")
+	assert.Equal(t, "validation_error", response["error"])
 }
 
 func TestUserHandler_Register_ValidationError(t *testing.T) {
@@ -334,12 +334,13 @@ func TestUserHandler_Register_ValidationError(t *testing.T) {
 
 			handler.RegisterUser(w, req)
 
-			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
 
 			var response map[string]string
 			err := json.Unmarshal(w.Body.Bytes(), &response)
 			require.NoError(t, err)
-			assert.Contains(t, response["error"], "required")
+			assert.Equal(t, "invalid_input", response["error"])
+			assert.Contains(t, response["message"], "required")
 		})
 	}
 }
@@ -375,7 +376,7 @@ func TestUserHandler_Register_UseCaseError(t *testing.T) {
 	var response map[string]string
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.Contains(t, response["error"], "failed to register user")
+	assert.Equal(t, "internal_error", response["error"])
 
 	mockUseCase.AssertExpectations(t)
 }

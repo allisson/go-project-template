@@ -149,7 +149,8 @@ func TestUserUseCase_RegisterUser_CreateUserError(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Nil(t, user)
-	assert.Contains(t, err.Error(), "failed to create user")
+	// The error should be the database error returned by the repository
+	assert.Equal(t, createError, err)
 
 	txManager.AssertExpectations(t)
 	userRepo.AssertExpectations(t)
