@@ -49,6 +49,10 @@ go-project-template/
 │   │   ├── domain/             # User entities
 │   │   │   └── user.go
 │   │   ├── http/               # User HTTP handlers
+│   │   │   ├── dto/            # Request/response DTOs
+│   │   │   │   ├── request.go
+│   │   │   │   ├── response.go
+│   │   │   │   └── mapper.go
 │   │   │   └── user_handler.go
 │   │   ├── repository/         # User data access
 │   │   │   └── user_repository.go
@@ -72,10 +76,11 @@ go-project-template/
 
 The project follows a modular domain architecture where each business domain is organized in its own directory with clear separation of concerns:
 
-- **`domain/`** - Contains entities, value objects, and domain types
+- **`domain/`** - Contains entities, value objects, and domain types (pure internal representation)
 - **`usecase/`** - Implements business logic and orchestrates operations
 - **`repository/`** - Handles data persistence and retrieval
-- **`http/`** - Contains HTTP handlers and request/response types
+- **`http/`** - Contains HTTP handlers and DTOs (Data Transfer Objects)
+  - **`dto/`** - Request/response DTOs and mappers (API contracts)
 
 ### Shared Utilities
 
@@ -334,6 +339,7 @@ The project follows a modular domain-driven structure where each business domain
 - `usecase/` - User registration, authentication logic
 - `repository/` - User data persistence
 - `http/` - User HTTP endpoints and handlers
+  - `dto/` - Request/response DTOs and mappers
 
 **Outbox Domain** (`internal/outbox/`)
 - `domain/` - OutboxEvent entity and status types
@@ -360,16 +366,24 @@ To add a new domain (e.g., `product`):
 ```
 internal/product/
 ├── domain/
-│   └── product.go
+│   └── product.go           # Domain entity (no JSON tags)
 ├── usecase/
-│   └── product_usecase.go
+│   └── product_usecase.go   # Business logic
 ├── repository/
-│   └── product_repository.go
+│   └── product_repository.go # Data access
 └── http/
-    └── product_handler.go
+    ├── dto/
+    │   ├── request.go       # API request DTOs
+    │   ├── response.go      # API response DTOs
+    │   └── mapper.go        # DTO-to-domain mappers
+    └── product_handler.go   # HTTP handlers
 ```
 
-**Tip:** Use the shared `httputil.MakeJSONResponse` function in your HTTP handlers for consistent JSON responses across all domains.
+**Tips:**
+- Use the shared `httputil.MakeJSONResponse` function in your HTTP handlers for consistent JSON responses
+- Keep domain models free of JSON tags - use DTOs for API serialization
+- Implement validation in your request DTOs
+- Create mapper functions to convert between DTOs and domain models
 
 ### Clean Architecture Layers
 
@@ -378,6 +392,73 @@ internal/product/
 3. **Use Case Layer** - Application business logic (e.g., `internal/user/usecase`)
 4. **Presentation Layer** - HTTP handlers and server (e.g., `internal/user/http`)
 5. **Utility Layer** - Shared utilities and helpers (e.g., `internal/httputil`)
+
+### Data Transfer Objects (DTOs)
+
+The project enforces clear boundaries between internal domain models and external API contracts using DTOs:
+
+**Domain Models** (`internal/user/domain/user.go`)
+- Pure internal representation of business entities
+- No JSON tags - completely decoupled from API serialization
+- Focus on business rules and domain logic
+
+**DTOs** (`internal/user/http/dto/`)
+- `request.go` - API request structures with validation
+- `response.go` - API response structures
+- `mapper.go` - Conversion functions between DTOs and domain models
+
+**Example:**
+
+```go
+// Request DTO
+type RegisterUserRequest struct {
+    Name     string `json:"name"`
+    Email    string `json:"email"`
+    Password string `json:"password"`
+}
+
+func (r *RegisterUserRequest) Validate() error {
+    if r.Name == "" {
+        return errors.New("name is required")
+    }
+    // ... validation logic
+}
+
+// Response DTO
+type UserResponse struct {
+    ID        int64     `json:"id"`
+    Name      string    `json:"name"`
+    Email     string    `json:"email"`
+    CreatedAt time.Time `json:"created_at"`
+    UpdatedAt time.Time `json:"updated_at"`
+}
+
+// Mapper functions
+func ToRegisterUserInput(req RegisterUserRequest) usecase.RegisterUserInput {
+    return usecase.RegisterUserInput{
+        Name:     req.Name,
+        Email:    req.Email,
+        Password: req.Password,
+    }
+}
+
+func ToUserResponse(user *domain.User) UserResponse {
+    return UserResponse{
+        ID:        user.ID,
+        Name:      user.Name,
+        Email:     user.Email,
+        CreatedAt: user.CreatedAt,
+        UpdatedAt: user.UpdatedAt,
+    }
+}
+```
+
+**Benefits:**
+1. **Separation of Concerns** - Domain models evolve independently from API contracts
+2. **Security** - Sensitive fields (like passwords) are never exposed in API responses
+3. **Flexibility** - Different API views of the same domain model (e.g., summary vs detailed)
+4. **Versioning** - Easy to maintain multiple API versions with different DTOs
+5. **Validation** - Request validation happens at the DTO level before reaching domain logic
 
 ### Transaction Management
 

@@ -14,6 +14,7 @@ import (
 	"github.com/allisson/go-project-template/internal/httputil"
 	userDomain "github.com/allisson/go-project-template/internal/user/domain"
 	userHttp "github.com/allisson/go-project-template/internal/user/http"
+	"github.com/allisson/go-project-template/internal/user/http/dto"
 	userUsecase "github.com/allisson/go-project-template/internal/user/usecase"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -233,10 +234,16 @@ func TestUserHandler_Register_Success(t *testing.T) {
 	mockUseCase := &MockUserUseCase{}
 	handler := userHttp.NewUserHandler(mockUseCase, nil)
 
-	input := userUsecase.RegisterUserInput{
+	req := dto.RegisterUserRequest{
 		Name:     "John Doe",
 		Email:    "john@example.com",
 		Password: "securepassword123",
+	}
+
+	input := userUsecase.RegisterUserInput{
+		Name:     req.Name,
+		Email:    req.Email,
+		Password: req.Password,
 	}
 
 	expectedUser := &userDomain.User{
@@ -247,12 +254,12 @@ func TestUserHandler_Register_Success(t *testing.T) {
 
 	mockUseCase.On("RegisterUser", mock.Anything, input).Return(expectedUser, nil)
 
-	body, _ := json.Marshal(input)
-	req := httptest.NewRequest(http.MethodPost, "/api/users", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	body, _ := json.Marshal(req)
+	httpReq := httptest.NewRequest(http.MethodPost, "/api/users", bytes.NewReader(body))
+	httpReq.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	handler.RegisterUser(w, req)
+	handler.RegisterUser(w, httpReq)
 
 	assert.Equal(t, http.StatusCreated, w.Code)
 
@@ -290,11 +297,11 @@ func TestUserHandler_Register_ValidationError(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		input userUsecase.RegisterUserInput
+		input dto.RegisterUserRequest
 	}{
 		{
 			name: "empty name",
-			input: userUsecase.RegisterUserInput{
+			input: dto.RegisterUserRequest{
 				Name:     "",
 				Email:    "john@example.com",
 				Password: "password",
@@ -302,7 +309,7 @@ func TestUserHandler_Register_ValidationError(t *testing.T) {
 		},
 		{
 			name: "empty email",
-			input: userUsecase.RegisterUserInput{
+			input: dto.RegisterUserRequest{
 				Name:     "John Doe",
 				Email:    "",
 				Password: "password",
@@ -310,7 +317,7 @@ func TestUserHandler_Register_ValidationError(t *testing.T) {
 		},
 		{
 			name: "empty password",
-			input: userUsecase.RegisterUserInput{
+			input: dto.RegisterUserRequest{
 				Name:     "John Doe",
 				Email:    "john@example.com",
 				Password: "",
@@ -341,21 +348,27 @@ func TestUserHandler_Register_UseCaseError(t *testing.T) {
 	mockUseCase := &MockUserUseCase{}
 	handler := userHttp.NewUserHandler(mockUseCase, nil)
 
-	input := userUsecase.RegisterUserInput{
+	req := dto.RegisterUserRequest{
 		Name:     "John Doe",
 		Email:    "john@example.com",
 		Password: "securepassword123",
 	}
 
+	input := userUsecase.RegisterUserInput{
+		Name:     req.Name,
+		Email:    req.Email,
+		Password: req.Password,
+	}
+
 	useCaseError := errors.New("database error")
 	mockUseCase.On("RegisterUser", mock.Anything, input).Return(nil, useCaseError)
 
-	body, _ := json.Marshal(input)
-	req := httptest.NewRequest(http.MethodPost, "/api/users", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	body, _ := json.Marshal(req)
+	httpReq := httptest.NewRequest(http.MethodPost, "/api/users", bytes.NewReader(body))
+	httpReq.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	handler.RegisterUser(w, req)
+	handler.RegisterUser(w, httpReq)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 
