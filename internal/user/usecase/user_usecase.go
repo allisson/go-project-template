@@ -14,6 +14,7 @@ import (
 	"github.com/allisson/go-project-template/internal/user/domain"
 	appValidation "github.com/allisson/go-project-template/internal/validation"
 	"github.com/allisson/go-pwdhash"
+	"github.com/google/uuid"
 )
 
 // RegisterUserInput contains the input data for user registration
@@ -27,13 +28,13 @@ type RegisterUserInput struct {
 type UseCase interface {
 	RegisterUser(ctx context.Context, input RegisterUserInput) (*domain.User, error)
 	GetUserByEmail(ctx context.Context, email string) (*domain.User, error)
-	GetUserByID(ctx context.Context, id int64) (*domain.User, error)
+	GetUserByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
 }
 
 // UserRepository interface defines user repository operations
 type UserRepository interface {
 	Create(ctx context.Context, user *domain.User) error
-	GetByID(ctx context.Context, id int64) (*domain.User, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
 	GetByEmail(ctx context.Context, email string) (*domain.User, error)
 }
 
@@ -119,6 +120,7 @@ func (uc *UserUseCase) RegisterUser(ctx context.Context, input RegisterUserInput
 	}
 
 	user := &domain.User{
+		ID:       uuid.Must(uuid.NewV7()),
 		Name:     strings.TrimSpace(input.Name),
 		Email:    strings.TrimSpace(strings.ToLower(input.Email)),
 		Password: hashedPassword,
@@ -144,6 +146,7 @@ func (uc *UserUseCase) RegisterUser(ctx context.Context, input RegisterUserInput
 
 		// Create outbox event
 		outboxEvent := &outboxDomain.OutboxEvent{
+			ID:        uuid.Must(uuid.NewV7()),
 			EventType: "user.created",
 			Payload:   string(payloadJSON),
 			Status:    outboxDomain.OutboxEventStatusPending,
@@ -170,6 +173,6 @@ func (uc *UserUseCase) GetUserByEmail(ctx context.Context, email string) (*domai
 }
 
 // GetUserByID retrieves a user by ID
-func (uc *UserUseCase) GetUserByID(ctx context.Context, id int64) (*domain.User, error) {
+func (uc *UserUseCase) GetUserByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
 	return uc.userRepo.GetByID(ctx, id)
 }

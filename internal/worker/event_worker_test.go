@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/allisson/go-project-template/internal/outbox/domain"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -101,16 +102,18 @@ func TestEventWorker_ProcessEvents_Success(t *testing.T) {
 	worker := NewEventWorker(config, txManager, outboxRepo, nil)
 
 	ctx := context.Background()
+	uuid1 := uuid.Must(uuid.NewV7())
+	uuid2 := uuid.Must(uuid.NewV7())
 	events := []*domain.OutboxEvent{
 		{
-			ID:        1,
+			ID:        uuid1,
 			EventType: "user.created",
 			Payload:   `{"user_id": 1, "name": "John Doe", "email": "john@example.com"}`,
 			Status:    domain.OutboxEventStatusPending,
 			Retries:   0,
 		},
 		{
-			ID:        2,
+			ID:        uuid2,
 			EventType: "user.created",
 			Payload:   `{"user_id": 2, "name": "Jane Doe", "email": "jane@example.com"}`,
 			Status:    domain.OutboxEventStatusPending,
@@ -198,9 +201,10 @@ func TestEventWorker_ProcessEvents_InvalidJSON(t *testing.T) {
 	worker := NewEventWorker(config, txManager, outboxRepo, nil)
 
 	ctx := context.Background()
+	uuid1 := uuid.Must(uuid.NewV7())
 	events := []*domain.OutboxEvent{
 		{
-			ID:        1,
+			ID:        uuid1,
 			EventType: "user.created",
 			Payload:   `invalid json`,
 			Status:    domain.OutboxEventStatusPending,
@@ -212,7 +216,7 @@ func TestEventWorker_ProcessEvents_InvalidJSON(t *testing.T) {
 	txManager.On("WithTx", ctx, mock.AnythingOfType("func(context.Context) error")).Return(nil)
 	outboxRepo.On("GetPendingEvents", ctx, config.BatchSize).Return(events, nil)
 	outboxRepo.On("Update", ctx, mock.MatchedBy(func(e *domain.OutboxEvent) bool {
-		return e.ID == 1 && e.Retries == 1 && e.LastError != nil
+		return e.ID == uuid1 && e.Retries == 1 && e.LastError != nil
 	})).Return(nil)
 
 	err := worker.processEvents(ctx)
@@ -235,9 +239,10 @@ func TestEventWorker_ProcessEvents_MaxRetriesReached(t *testing.T) {
 	worker := NewEventWorker(config, txManager, outboxRepo, nil)
 
 	ctx := context.Background()
+	uuid1 := uuid.Must(uuid.NewV7())
 	events := []*domain.OutboxEvent{
 		{
-			ID:        1,
+			ID:        uuid1,
 			EventType: "user.created",
 			Payload:   `invalid json`,
 			Status:    domain.OutboxEventStatusPending,
@@ -249,7 +254,7 @@ func TestEventWorker_ProcessEvents_MaxRetriesReached(t *testing.T) {
 	txManager.On("WithTx", ctx, mock.AnythingOfType("func(context.Context) error")).Return(nil)
 	outboxRepo.On("GetPendingEvents", ctx, config.BatchSize).Return(events, nil)
 	outboxRepo.On("Update", ctx, mock.MatchedBy(func(e *domain.OutboxEvent) bool {
-		return e.ID == 1 &&
+		return e.ID == uuid1 &&
 			e.Retries == 3 &&
 			e.Status == domain.OutboxEventStatusFailed &&
 			e.LastError != nil
@@ -275,9 +280,10 @@ func TestEventWorker_ProcessEvents_UpdateError(t *testing.T) {
 	worker := NewEventWorker(config, txManager, outboxRepo, nil)
 
 	ctx := context.Background()
+	uuid1 := uuid.Must(uuid.NewV7())
 	events := []*domain.OutboxEvent{
 		{
-			ID:        1,
+			ID:        uuid1,
 			EventType: "user.created",
 			Payload:   `{"user_id": 1}`,
 			Status:    domain.OutboxEventStatusPending,
@@ -313,8 +319,9 @@ func TestEventWorker_ProcessEvent_Success(t *testing.T) {
 	worker := NewEventWorker(config, txManager, outboxRepo, nil)
 
 	ctx := context.Background()
+	uuid1 := uuid.Must(uuid.NewV7())
 	event := &domain.OutboxEvent{
-		ID:        1,
+		ID:        uuid1,
 		EventType: "user.created",
 		Payload:   `{"user_id": 1, "name": "John Doe", "email": "john@example.com"}`,
 		Status:    domain.OutboxEventStatusPending,
@@ -339,8 +346,9 @@ func TestEventWorker_ProcessEvent_UnknownEventType(t *testing.T) {
 	worker := NewEventWorker(config, txManager, outboxRepo, nil)
 
 	ctx := context.Background()
+	uuid1 := uuid.Must(uuid.NewV7())
 	event := &domain.OutboxEvent{
-		ID:        1,
+		ID:        uuid1,
 		EventType: "unknown.event",
 		Payload:   `{"data": "test"}`,
 		Status:    domain.OutboxEventStatusPending,
@@ -365,8 +373,9 @@ func TestEventWorker_ProcessEvent_InvalidJSON(t *testing.T) {
 	worker := NewEventWorker(config, txManager, outboxRepo, nil)
 
 	ctx := context.Background()
+	uuid1 := uuid.Must(uuid.NewV7())
 	event := &domain.OutboxEvent{
-		ID:        1,
+		ID:        uuid1,
 		EventType: "user.created",
 		Payload:   `invalid json`,
 		Status:    domain.OutboxEventStatusPending,

@@ -99,7 +99,7 @@ func (w *EventWorker) processEvents(ctx context.Context) error {
 			if err := w.processEvent(ctx, event); err != nil {
 				if w.logger != nil {
 					w.logger.Error("failed to process event",
-						slog.Int64("event_id", event.ID),
+						slog.String("event_id", event.ID.String()),
 						slog.String("event_type", event.EventType),
 						slog.Any("error", err),
 					)
@@ -138,7 +138,7 @@ func (w *EventWorker) processEvents(ctx context.Context) error {
 func (w *EventWorker) processEvent(ctx context.Context, event *domain.OutboxEvent) error {
 	if w.logger != nil {
 		w.logger.Info("processing event",
-			slog.Int64("event_id", event.ID),
+			slog.String("event_id", event.ID.String()),
 			slog.String("event_type", event.EventType),
 		)
 	}
