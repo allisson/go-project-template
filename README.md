@@ -6,6 +6,7 @@ A production-ready Go project template following Clean Architecture and Domain-D
 
 - **Modular Domain Architecture** - Domain-based code organization for scalability
 - **Clean Architecture** - Separation of concerns with domain, repository, use case, and presentation layers
+- **Dependency Injection Container** - Centralized component wiring with lazy initialization and clean resource management
 - **Multiple Database Support** - PostgreSQL and MySQL via unified repository layer
 - **Database Migrations** - Separate migrations for PostgreSQL and MySQL using golang-migrate
 - **Transaction Management** - TxManager interface for handling database transactions
@@ -29,6 +30,10 @@ go-project-template/
 │   └── app/                    # Application entry point
 │       └── main.go
 ├── internal/
+│   ├── app/                    # Dependency injection container
+│   │   ├── di.go
+│   │   ├── di_test.go
+│   │   └── README.md
 │   ├── config/                 # Configuration management
 │   │   └── config.go
 │   ├── database/               # Database connection and transaction management
@@ -84,6 +89,7 @@ The project follows a modular domain architecture where each business domain is 
 
 ### Shared Utilities
 
+- **`app/`** - Dependency injection container for assembling application components
 - **`httputil/`** - Shared HTTP utility functions used across all domain modules (e.g., `MakeJSONResponse`)
 - **`config/`** - Application-wide configuration
 - **`database/`** - Database connection and transaction management
@@ -330,6 +336,44 @@ make docker-run-migrate
 
 ## Architecture
 
+### Dependency Injection Container
+
+The project uses a custom dependency injection (DI) container located in `internal/app/` to manage all application components. This provides:
+
+- **Centralized component wiring** - All dependencies are assembled in one place
+- **Lazy initialization** - Components are only created when first accessed
+- **Singleton pattern** - Each component is initialized once and reused
+- **Clean resource management** - Unified shutdown for all resources
+- **Thread-safe** - Safe for concurrent access across goroutines
+
+**Example usage:**
+
+```go
+// Create container with configuration
+container := app.NewContainer(cfg)
+
+// Get HTTP server (automatically initializes all dependencies)
+server, err := container.HTTPServer()
+if err != nil {
+    return fmt.Errorf("failed to initialize HTTP server: %w", err)
+}
+
+// Clean shutdown
+defer container.Shutdown(ctx)
+```
+
+The container manages the entire dependency graph:
+
+```
+Container
+├── Infrastructure (Database, Logger)
+├── Repositories (User, Outbox)
+├── Use Cases (User)
+└── Presentation (HTTP Server, Worker)
+```
+
+For more details on the DI container, see [`internal/app/README.md`](internal/app/README.md).
+
 ### Modular Domain Architecture
 
 The project follows a modular domain-driven structure where each business domain is self-contained:
@@ -346,6 +390,7 @@ The project follows a modular domain-driven structure where each business domain
 - `repository/` - Event persistence and retrieval
 
 **Shared Infrastructure**
+- `app/` - Dependency injection container for component assembly
 - `config/` - Application configuration
 - `database/` - Database connection and transaction management
 - `http/` - HTTP server, middleware, and shared utilities
@@ -358,10 +403,13 @@ The project follows a modular domain-driven structure where each business domain
 2. **Encapsulation** - Each domain is self-contained with clear boundaries
 3. **Team Collaboration** - Teams can work on different domains independently
 4. **Maintainability** - Related code is co-located, making it easier to understand and modify
+5. **Dependency Management** - Centralized DI container simplifies component wiring and testing
 
 ### Adding New Domains
 
 To add a new domain (e.g., `product`):
+
+#### 1. Create the domain structure
 
 ```
 internal/product/
@@ -379,11 +427,58 @@ internal/product/
     └── product_handler.go   # HTTP handlers
 ```
 
+#### 2. Register in DI container
+
+Add the new domain to the dependency injection container (`internal/app/di.go`):
+
+```go
+// Add fields to Container struct
+type Container struct {
+    // ... existing fields
+    productRepo     *productRepository.ProductRepository
+    productUseCase  *productUsecase.ProductUseCase
+    productRepoInit sync.Once
+    productUseCaseInit sync.Once
+}
+
+// Add getter methods
+func (c *Container) ProductRepository() (*productRepository.ProductRepository, error) {
+    var err error
+    c.productRepoInit.Do(func() {
+        c.productRepo, err = c.initProductRepository()
+        if err != nil {
+            c.initErrors["productRepo"] = err
+        }
+    })
+    // ... error handling
+    return c.productRepo, nil
+}
+
+// Add initialization methods
+func (c *Container) initProductRepository() (*productRepository.ProductRepository, error) {
+    db, err := c.DB()
+    if err != nil {
+        return nil, fmt.Errorf("failed to get database: %w", err)
+    }
+    return productRepository.NewProductRepository(db, c.config.DBDriver), nil
+}
+```
+
+#### 3. Wire handlers in HTTP server
+
+Update `internal/http/server.go` to register product routes:
+
+```go
+productHandler := productHttp.NewProductHandler(container.ProductUseCase(), logger)
+mux.HandleFunc("/api/products", productHandler.HandleProducts)
+```
+
 **Tips:**
 - Use the shared `httputil.MakeJSONResponse` function in your HTTP handlers for consistent JSON responses
 - Keep domain models free of JSON tags - use DTOs for API serialization
 - Implement validation in your request DTOs
 - Create mapper functions to convert between DTOs and domain models
+- Register all components in the DI container for proper lifecycle management
 
 ### Clean Architecture Layers
 

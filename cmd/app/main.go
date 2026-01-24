@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -11,13 +10,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/allisson/go-project-template/internal/app"
 	"github.com/allisson/go-project-template/internal/config"
-	"github.com/allisson/go-project-template/internal/database"
-	"github.com/allisson/go-project-template/internal/http"
-	outboxRepository "github.com/allisson/go-project-template/internal/outbox/repository"
-	userRepository "github.com/allisson/go-project-template/internal/user/repository"
-	userUsecase "github.com/allisson/go-project-template/internal/user/usecase"
-	"github.com/allisson/go-project-template/internal/worker"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -25,10 +19,10 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-// closeDB closes the database connection and logs any errors.
-func closeDB(db *sql.DB, logger *slog.Logger) {
-	if err := db.Close(); err != nil {
-		logger.Error("failed to close the database", slog.Any("error", err))
+// closeContainer closes all resources in the container and logs any errors.
+func closeContainer(container *app.Container, logger *slog.Logger) {
+	if err := container.Shutdown(context.Background()); err != nil {
+		logger.Error("failed to shutdown container", slog.Any("error", err))
 	}
 }
 
@@ -81,35 +75,21 @@ func runServer(ctx context.Context) error {
 	// Load configuration
 	cfg := config.Load()
 
-	// Setup logger
-	logger := setupLogger(cfg.LogLevel)
+	// Create DI container
+	container := app.NewContainer(cfg)
+
+	// Get logger from container
+	logger := container.Logger()
 	logger.Info("starting server", slog.String("version", "1.0.0"))
 
-	// Connect to database
-	db, err := database.Connect(database.Config{
-		Driver:             cfg.DBDriver,
-		ConnectionString:   cfg.DBConnectionString,
-		MaxOpenConnections: cfg.DBMaxOpenConnections,
-		MaxIdleConnections: cfg.DBMaxIdleConnections,
-		ConnMaxLifetime:    cfg.DBConnMaxLifetime,
-	})
+	// Ensure cleanup on exit
+	defer closeContainer(container, logger)
+
+	// Get HTTP server from container (this initializes all dependencies)
+	server, err := container.HTTPServer()
 	if err != nil {
-		return fmt.Errorf("failed to connect to database: %w", err)
+		return fmt.Errorf("failed to initialize HTTP server: %w", err)
 	}
-	defer closeDB(db, logger)
-
-	// Initialize components
-	txManager := database.NewTxManager(db)
-	userRepo := userRepository.NewUserRepository(db, cfg.DBDriver)
-	outboxRepo := outboxRepository.NewOutboxEventRepository(db, cfg.DBDriver)
-
-	userUseCaseInstance, err := userUsecase.NewUserUseCase(txManager, userRepo, outboxRepo)
-	if err != nil {
-		return fmt.Errorf("failed to create user use case: %w", err)
-	}
-
-	// Create HTTP server
-	server := http.NewServer(cfg.ServerHost, cfg.ServerPort, logger, userUseCaseInstance)
 
 	// Setup graceful shutdown
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
@@ -142,7 +122,10 @@ func runServer(ctx context.Context) error {
 // runMigrations executes database migrations based on the configured driver.
 func runMigrations() error {
 	cfg := config.Load()
-	logger := setupLogger(cfg.LogLevel)
+
+	// Create container just for logger
+	container := app.NewContainer(cfg)
+	logger := container.Logger()
 
 	logger.Info("running database migrations",
 		slog.String("driver", cfg.DBDriver),
@@ -173,35 +156,21 @@ func runWorker(ctx context.Context) error {
 	// Load configuration
 	cfg := config.Load()
 
-	// Setup logger
-	logger := setupLogger(cfg.LogLevel)
+	// Create DI container
+	container := app.NewContainer(cfg)
+
+	// Get logger from container
+	logger := container.Logger()
 	logger.Info("starting worker", slog.String("version", "1.0.0"))
 
-	// Connect to database
-	db, err := database.Connect(database.Config{
-		Driver:             cfg.DBDriver,
-		ConnectionString:   cfg.DBConnectionString,
-		MaxOpenConnections: cfg.DBMaxOpenConnections,
-		MaxIdleConnections: cfg.DBMaxIdleConnections,
-		ConnMaxLifetime:    cfg.DBConnMaxLifetime,
-	})
+	// Ensure cleanup on exit
+	defer closeContainer(container, logger)
+
+	// Get event worker from container (this initializes all dependencies)
+	eventWorker, err := container.EventWorker()
 	if err != nil {
-		return fmt.Errorf("failed to connect to database: %w", err)
+		return fmt.Errorf("failed to initialize event worker: %w", err)
 	}
-	defer closeDB(db, logger)
-
-	// Initialize components
-	txManager := database.NewTxManager(db)
-	outboxRepo := outboxRepository.NewOutboxEventRepository(db, cfg.DBDriver)
-
-	workerConfig := worker.Config{
-		Interval:      cfg.WorkerInterval,
-		BatchSize:     cfg.WorkerBatchSize,
-		MaxRetries:    cfg.WorkerMaxRetries,
-		RetryInterval: cfg.WorkerRetryInterval,
-	}
-
-	eventWorker := worker.NewEventWorker(workerConfig, txManager, outboxRepo, logger)
 
 	// Setup graceful shutdown
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
@@ -209,27 +178,4 @@ func runWorker(ctx context.Context) error {
 
 	// Start worker
 	return eventWorker.Start(ctx)
-}
-
-// setupLogger creates and configures a structured logger based on the specified log level.
-func setupLogger(level string) *slog.Logger {
-	var logLevel slog.Level
-	switch level {
-	case "debug":
-		logLevel = slog.LevelDebug
-	case "info":
-		logLevel = slog.LevelInfo
-	case "warn":
-		logLevel = slog.LevelWarn
-	case "error":
-		logLevel = slog.LevelError
-	default:
-		logLevel = slog.LevelInfo
-	}
-
-	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: logLevel,
-	})
-
-	return slog.New(handler)
 }
