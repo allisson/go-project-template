@@ -8,7 +8,7 @@ A production-ready Go project template following Clean Architecture and Domain-D
 - **Clean Architecture** - Separation of concerns with domain, repository, use case, and presentation layers
 - **Standardized Error Handling** - Domain errors with proper HTTP status code mapping
 - **Dependency Injection Container** - Centralized component wiring with lazy initialization and clean resource management
-- **Multiple Database Support** - PostgreSQL and MySQL via unified repository layer
+- **Multiple Database Support** - PostgreSQL and MySQL with dedicated repository implementations using `database/sql`
 - **Database Migrations** - Separate migrations for PostgreSQL and MySQL using golang-migrate
 - **UUIDv7 Primary Keys** - Time-ordered, sortable UUIDs for globally unique identifiers
 - **Transaction Management** - TxManager interface for handling database transactions
@@ -54,7 +54,8 @@ go-project-template/
 │   │   ├── domain/             # Outbox entities
 │   │   │   └── outbox_event.go
 │   │   └── repository/         # Outbox data access
-│   │       └── outbox_repository.go
+│   │       ├── mysql_outbox_repository.go
+│   │       └── postgresql_outbox_repository.go
 │   ├── user/                   # User domain module
 │   │   ├── domain/             # User entities and domain errors
 │   │   │   └── user.go
@@ -65,7 +66,8 @@ go-project-template/
 │   │   │   │   └── mapper.go
 │   │   │   └── user_handler.go
 │   │   ├── repository/         # User data access
-│   │   │   └── user_repository.go
+│   │   │   ├── mysql_user_repository.go
+│   │   │   └── postgresql_user_repository.go
 │   │   └── usecase/            # User business logic
 │   │       └── user_usecase.go
 │   ├── validation/             # Custom validation rules
@@ -402,8 +404,15 @@ var (
 **1. Repository Layer** - Transforms infrastructure errors to domain errors:
 
 ```go
-func (r *UserRepository) GetByID(ctx context.Context, id int64) (*domain.User, error) {
-    if err := sqlutil.Get(ctx, querier, "users", opts, &user); err != nil {
+func (r *PostgreSQLUserRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
+    querier := database.GetTx(ctx, r.db)
+    query := `SELECT id, name, email, password, created_at, updated_at FROM users WHERE id = $1`
+    
+    var user domain.User
+    err := querier.QueryRowContext(ctx, query, id).Scan(
+        &user.ID, &user.Name, &user.Email, &user.Password, &user.CreatedAt, &user.UpdatedAt,
+    )
+    if err != nil {
         if errors.Is(err, sql.ErrNoRows) {
             return nil, domain.ErrUserNotFound  // Infrastructure → Domain
         }
@@ -538,6 +547,102 @@ make docker-run-migrate
 
 ## Architecture
 
+### Database Repository Pattern
+
+The project uses separate repository implementations for MySQL and PostgreSQL, leveraging Go's standard `database/sql` package. This approach provides:
+
+- **Database-specific optimizations** - Each implementation is tailored to the specific database's features and syntax
+- **Type safety** - Direct use of database/sql types without abstraction layers
+- **Clarity** - Explicit SQL queries make it clear what operations are being performed
+- **No external dependencies** - Uses only the standard library for database operations
+
+**Repository Interface** (defined in use case layer):
+
+```go
+// internal/user/usecase/user_usecase.go
+type UserRepository interface {
+    Create(ctx context.Context, user *domain.User) error
+    GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
+    GetByEmail(ctx context.Context, email string) (*domain.User, error)
+}
+```
+
+**MySQL Implementation** (`internal/user/repository/mysql_user_repository.go`):
+
+```go
+func (r *MySQLUserRepository) Create(ctx context.Context, user *domain.User) error {
+    querier := database.GetTx(ctx, r.db)
+    
+    query := `INSERT INTO users (id, name, email, password, created_at, updated_at) 
+              VALUES (?, ?, ?, ?, NOW(), NOW())`
+    
+    // Convert UUID to bytes for MySQL BINARY(16)
+    uuidBytes, err := user.ID.MarshalBinary()
+    if err != nil {
+        return apperrors.Wrap(err, "failed to marshal UUID")
+    }
+    
+    _, err = querier.ExecContext(ctx, query, uuidBytes, user.Name, user.Email, user.Password)
+    if err != nil {
+        if isMySQLUniqueViolation(err) {
+            return domain.ErrUserAlreadyExists
+        }
+        return apperrors.Wrap(err, "failed to create user")
+    }
+    return nil
+}
+```
+
+**PostgreSQL Implementation** (`internal/user/repository/postgresql_user_repository.go`):
+
+```go
+func (r *PostgreSQLUserRepository) Create(ctx context.Context, user *domain.User) error {
+    querier := database.GetTx(ctx, r.db)
+    
+    query := `INSERT INTO users (id, name, email, password, created_at, updated_at) 
+              VALUES ($1, $2, $3, $4, NOW(), NOW())`
+    
+    _, err := querier.ExecContext(ctx, query, user.ID, user.Name, user.Email, user.Password)
+    if err != nil {
+        if isPostgreSQLUniqueViolation(err) {
+            return domain.ErrUserAlreadyExists
+        }
+        return apperrors.Wrap(err, "failed to create user")
+    }
+    return nil
+}
+```
+
+**Key Differences:**
+
+| Feature | MySQL | PostgreSQL |
+|---------|-------|------------|
+| UUID Storage | `BINARY(16)` - requires marshaling/unmarshaling | Native `UUID` type |
+| Placeholders | `?` for all parameters | `$1, $2, $3...` numbered parameters |
+| Unique Errors | Check for "1062" or "duplicate entry" | Check for "duplicate key" or "unique constraint" |
+
+**Transaction Support:**
+
+The `database.GetTx()` helper function retrieves the transaction from context if available, otherwise returns the DB connection:
+
+```go
+// internal/database/txmanager.go
+type Querier interface {
+    ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+    QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+    QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+func GetTx(ctx context.Context, db *sql.DB) Querier {
+    if tx, ok := ctx.Value(txKey{}).(*sql.Tx); ok {
+        return tx
+    }
+    return db
+}
+```
+
+This pattern ensures repositories work seamlessly within transactions managed by the use case layer.
+
 ### Dependency Injection Container
 
 The project uses a custom dependency injection (DI) container located in `internal/app/` to manage all application components. This provides:
@@ -621,7 +726,8 @@ internal/product/
 ├── usecase/
 │   └── product_usecase.go      # UseCase interface + business logic
 ├── repository/
-│   └── product_repository.go   # Data access (returns domain errors)
+│   ├── mysql_product_repository.go      # MySQL data access
+│   └── postgresql_product_repository.go # PostgreSQL data access
 └── http/
     ├── dto/
     │   ├── request.go          # API request DTOs
@@ -699,12 +805,21 @@ func (c *Container) ProductUseCase() (productUsecase.UseCase, error) {
 }
 
 // Add initialization methods
-func (c *Container) initProductRepository() (*productRepository.ProductRepository, error) {
+func (c *Container) initProductRepository() (productUsecase.ProductRepository, error) {
     db, err := c.DB()
     if err != nil {
         return nil, fmt.Errorf("failed to get database: %w", err)
     }
-    return productRepository.NewProductRepository(db, c.config.DBDriver), nil
+    
+    // Select the appropriate repository based on the database driver
+    switch c.config.DBDriver {
+    case "mysql":
+        return productRepository.NewMySQLProductRepository(db), nil
+    case "postgres":
+        return productRepository.NewPostgreSQLProductRepository(db), nil
+    default:
+        return nil, fmt.Errorf("unsupported database driver: %s", c.config.DBDriver)
+    }
 }
 
 func (c *Container) initProductUseCase() (productUsecase.UseCase, error) {
@@ -747,7 +862,7 @@ mux.HandleFunc("/api/products", productHandler.HandleProducts)
 ### Clean Architecture Layers
 
 1. **Domain Layer** - Contains business entities, domain errors, and rules (e.g., `internal/user/domain`)
-2. **Repository Layer** - Data access implementations using sqlutil; transforms infrastructure errors to domain errors (e.g., `internal/user/repository`)
+2. **Repository Layer** - Data access implementations using `database/sql`; transforms infrastructure errors to domain errors (e.g., `internal/user/repository`)
 3. **Use Case Layer** - UseCase interfaces and application business logic; returns domain errors (e.g., `internal/user/usecase`)
 4. **Presentation Layer** - HTTP handlers that map domain errors to HTTP responses (e.g., `internal/user/http`)
 5. **Utility Layer** - Shared utilities including error handling and mapping (e.g., `internal/httputil`, `internal/errors`)
@@ -1039,7 +1154,6 @@ go tool cover -html=coverage.out
 - [go-env](https://github.com/allisson/go-env) - Environment variable configuration
 - [godotenv](https://github.com/joho/godotenv) - Loads environment variables from .env files
 - [go-pwdhash](https://github.com/allisson/go-pwdhash) - Password hashing with Argon2id
-- [sqlutil](https://github.com/allisson/sqlutil) - SQL utilities for unified database access
 - [validation](https://github.com/jellydator/validation) - Advanced input validation library
 - [uuid](https://github.com/google/uuid) - UUID generation including UUIDv7 support
 - [urfave/cli](https://github.com/urfave/cli) - CLI framework
@@ -1063,7 +1177,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 This template uses the following excellent Go libraries:
 - github.com/allisson/go-env
 - github.com/allisson/go-pwdhash
-- github.com/allisson/sqlutil
 - github.com/jellydator/validation
 - github.com/urfave/cli
 - github.com/golang-migrate/migrate

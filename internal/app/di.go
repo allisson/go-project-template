@@ -32,8 +32,8 @@ type Container struct {
 	txManager database.TxManager
 
 	// Repositories
-	userRepo   *userRepository.UserRepository
-	outboxRepo *outboxRepository.OutboxEventRepository
+	userRepo   userUsecase.UserRepository
+	outboxRepo userUsecase.OutboxEventRepository
 
 	// Use Cases
 	userUseCase userUsecase.UseCase
@@ -116,7 +116,7 @@ func (c *Container) TxManager() (database.TxManager, error) {
 }
 
 // UserRepository returns the user repository instance.
-func (c *Container) UserRepository() (*userRepository.UserRepository, error) {
+func (c *Container) UserRepository() (userUsecase.UserRepository, error) {
 	var err error
 	c.userRepoInit.Do(func() {
 		c.userRepo, err = c.initUserRepository()
@@ -134,7 +134,7 @@ func (c *Container) UserRepository() (*userRepository.UserRepository, error) {
 }
 
 // OutboxRepository returns the outbox event repository instance.
-func (c *Container) OutboxRepository() (*outboxRepository.OutboxEventRepository, error) {
+func (c *Container) OutboxRepository() (userUsecase.OutboxEventRepository, error) {
 	var err error
 	c.outboxRepoInit.Do(func() {
 		c.outboxRepo, err = c.initOutboxRepository()
@@ -283,21 +283,39 @@ func (c *Container) initTxManager() (database.TxManager, error) {
 }
 
 // initUserRepository creates the user repository instance.
-func (c *Container) initUserRepository() (*userRepository.UserRepository, error) {
+func (c *Container) initUserRepository() (userUsecase.UserRepository, error) {
 	db, err := c.DB()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get database for user repository: %w", err)
 	}
-	return userRepository.NewUserRepository(db, c.config.DBDriver), nil
+
+	// Select the appropriate repository based on the database driver
+	switch c.config.DBDriver {
+	case "mysql":
+		return userRepository.NewMySQLUserRepository(db), nil
+	case "postgres":
+		return userRepository.NewPostgreSQLUserRepository(db), nil
+	default:
+		return nil, fmt.Errorf("unsupported database driver: %s", c.config.DBDriver)
+	}
 }
 
 // initOutboxRepository creates the outbox event repository instance.
-func (c *Container) initOutboxRepository() (*outboxRepository.OutboxEventRepository, error) {
+func (c *Container) initOutboxRepository() (userUsecase.OutboxEventRepository, error) {
 	db, err := c.DB()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get database for outbox repository: %w", err)
 	}
-	return outboxRepository.NewOutboxEventRepository(db, c.config.DBDriver), nil
+
+	// Select the appropriate repository based on the database driver
+	switch c.config.DBDriver {
+	case "mysql":
+		return outboxRepository.NewMySQLOutboxEventRepository(db), nil
+	case "postgres":
+		return outboxRepository.NewPostgreSQLOutboxEventRepository(db), nil
+	default:
+		return nil, fmt.Errorf("unsupported database driver: %s", c.config.DBDriver)
+	}
 }
 
 // initUserUseCase creates the user use case with all its dependencies.

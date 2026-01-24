@@ -41,15 +41,24 @@ func (p PasswordStrength) Validate(value interface{}) error {
 	}
 
 	if len(s) < p.MinLength {
-		return validation.NewError("validation_password_min_length", "password must be at least "+string(rune(p.MinLength+48))+" characters")
+		return validation.NewError(
+			"validation_password_min_length",
+			"password must be at least "+string(rune(p.MinLength+48))+" characters",
+		)
 	}
 
 	if p.RequireUpper && !hasUpperCase(s) {
-		return validation.NewError("validation_password_uppercase", "password must contain at least one uppercase letter")
+		return validation.NewError(
+			"validation_password_uppercase",
+			"password must contain at least one uppercase letter",
+		)
 	}
 
 	if p.RequireLower && !hasLowerCase(s) {
-		return validation.NewError("validation_password_lowercase", "password must contain at least one lowercase letter")
+		return validation.NewError(
+			"validation_password_lowercase",
+			"password must contain at least one lowercase letter",
+		)
 	}
 
 	if p.RequireNumber && !hasNumber(s) {
@@ -57,7 +66,10 @@ func (p PasswordStrength) Validate(value interface{}) error {
 	}
 
 	if p.RequireSpecial && !hasSpecialChar(s) {
-		return validation.NewError("validation_password_special", "password must contain at least one special character")
+		return validation.NewError(
+			"validation_password_special",
+			"password must contain at least one special character",
+		)
 	}
 
 	return nil

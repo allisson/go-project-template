@@ -6,57 +6,43 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/allisson/go-project-template/internal/outbox/domain"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/allisson/go-project-template/internal/outbox/domain"
 )
 
-func TestNewOutboxEventRepository(t *testing.T) {
+func TestNewMySQLOutboxEventRepository(t *testing.T) {
 	db, _, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close() //nolint:errcheck
 
-	tests := []struct {
-		name   string
-		driver string
-	}{
-		{
-			name:   "create repository with postgres driver",
-			driver: "postgres",
-		},
-		{
-			name:   "create repository with mysql driver",
-			driver: "mysql",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			repo := NewOutboxEventRepository(db, tt.driver)
-			assert.NotNil(t, repo)
-			assert.Equal(t, db, repo.db)
-		})
-	}
+	repo := NewMySQLOutboxEventRepository(db)
+	assert.NotNil(t, repo)
+	assert.Equal(t, db, repo.db)
 }
 
-func TestOutboxEventRepository_Create(t *testing.T) {
+func TestMySQLOutboxEventRepository_Create(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close() //nolint:errcheck
 
-	repo := NewOutboxEventRepository(db, "postgres")
+	repo := NewMySQLOutboxEventRepository(db)
 	ctx := context.Background()
 
+	uuid1 := uuid.Must(uuid.NewV7())
 	event := &domain.OutboxEvent{
+		ID:        uuid1,
 		EventType: "user.created",
 		Payload:   `{"id": 1}`,
 		Status:    domain.OutboxEventStatusPending,
 		Retries:   0,
 	}
 
+	idBytes, _ := uuid1.MarshalBinary()
 	mock.ExpectExec("INSERT INTO outbox_events").
-		WithArgs(event.EventType, event.Payload, event.Status, event.Retries, event.LastError, event.ProcessedAt).
+		WithArgs(idBytes, event.EventType, event.Payload, event.Status, event.Retries, event.LastError, event.ProcessedAt).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	err = repo.Create(ctx, event)
@@ -64,69 +50,62 @@ func TestOutboxEventRepository_Create(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestOutboxEventRepository_GetPendingEvents(t *testing.T) {
+func TestMySQLOutboxEventRepository_GetPendingEvents(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close() //nolint:errcheck
 
-	repo := NewOutboxEventRepository(db, "postgres")
+	repo := NewMySQLOutboxEventRepository(db)
 	ctx := context.Background()
 
 	now := time.Now()
 	uuid1 := uuid.Must(uuid.NewV7())
 	uuid2 := uuid.Must(uuid.NewV7())
-	expectedEvents := []*domain.OutboxEvent{
-		{
-			ID:        uuid1,
-			EventType: "user.created",
-			Payload:   `{"id": 1}`,
-			Status:    domain.OutboxEventStatusPending,
-			Retries:   0,
-			CreatedAt: now,
-			UpdatedAt: now,
-		},
-		{
-			ID:        uuid2,
-			EventType: "user.created",
-			Payload:   `{"id": 2}`,
-			Status:    domain.OutboxEventStatusPending,
-			Retries:   0,
-			CreatedAt: now.Add(time.Minute),
-			UpdatedAt: now.Add(time.Minute),
-		},
-	}
 
-	rows := sqlmock.NewRows([]string{"id", "event_type", "payload", "status", "retries", "last_error", "processed_at", "created_at", "updated_at"})
-	for _, event := range expectedEvents {
-		rows.AddRow(event.ID, event.EventType, event.Payload, event.Status, event.Retries, event.LastError, event.ProcessedAt, event.CreatedAt, event.UpdatedAt)
-	}
+	idBytes1, _ := uuid1.MarshalBinary()
+	idBytes2, _ := uuid2.MarshalBinary()
 
-	// Use AnyArg matcher since sqlutil adds multiple query parameters
+	rows := sqlmock.NewRows([]string{"id", "event_type", "payload", "status", "retries", "last_error", "processed_at", "created_at", "updated_at"}).
+		AddRow(idBytes1, "user.created", `{"id": 1}`, domain.OutboxEventStatusPending, 0, nil, nil, now, now).
+		AddRow(idBytes2, "user.created", `{"id": 2}`, domain.OutboxEventStatusPending, 0, nil, nil, now.Add(time.Minute), now.Add(time.Minute))
+
 	mock.ExpectQuery("SELECT (.+) FROM outbox_events").
-		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WithArgs(domain.OutboxEventStatusPending, 10).
 		WillReturnRows(rows)
 
 	events, err := repo.GetPendingEvents(ctx, 10)
 	assert.NoError(t, err)
 	assert.NotNil(t, events)
 	assert.Len(t, events, 2)
-	assert.Equal(t, expectedEvents[0].ID, events[0].ID)
-	assert.Equal(t, expectedEvents[1].ID, events[1].ID)
+	assert.Equal(t, uuid1, events[0].ID)
+	assert.Equal(t, uuid2, events[1].ID)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestOutboxEventRepository_GetPendingEvents_Empty(t *testing.T) {
+func TestMySQLOutboxEventRepository_GetPendingEvents_Empty(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close() //nolint:errcheck
 
-	repo := NewOutboxEventRepository(db, "postgres")
+	repo := NewMySQLOutboxEventRepository(db)
 	ctx := context.Background()
 
-	rows := sqlmock.NewRows([]string{"id", "event_type", "payload", "status", "retries", "last_error", "processed_at", "created_at", "updated_at"})
+	rows := sqlmock.NewRows(
+		[]string{
+			"id",
+			"event_type",
+			"payload",
+			"status",
+			"retries",
+			"last_error",
+			"processed_at",
+			"created_at",
+			"updated_at",
+		},
+	)
 
 	mock.ExpectQuery("SELECT (.+) FROM outbox_events").
-		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WithArgs(domain.OutboxEventStatusPending, 10).
 		WillReturnRows(rows)
 
 	events, err := repo.GetPendingEvents(ctx, 10)
@@ -135,12 +114,12 @@ func TestOutboxEventRepository_GetPendingEvents_Empty(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestOutboxEventRepository_Update(t *testing.T) {
+func TestMySQLOutboxEventRepository_Update(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close() //nolint:errcheck
 
-	repo := NewOutboxEventRepository(db, "postgres")
+	repo := NewMySQLOutboxEventRepository(db)
 	ctx := context.Background()
 
 	now := time.Now()
@@ -156,8 +135,9 @@ func TestOutboxEventRepository_Update(t *testing.T) {
 		UpdatedAt:   now,
 	}
 
+	idBytes, _ := uuid1.MarshalBinary()
 	mock.ExpectExec("UPDATE outbox_events").
-		WithArgs(event.EventType, event.Payload, event.Status, event.Retries, event.LastError, event.ProcessedAt, event.ID).
+		WithArgs(event.EventType, event.Payload, event.Status, event.Retries, event.LastError, event.ProcessedAt, idBytes).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	err = repo.Update(ctx, event)
@@ -165,12 +145,12 @@ func TestOutboxEventRepository_Update(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestOutboxEventRepository_Update_Error(t *testing.T) {
+func TestMySQLOutboxEventRepository_Update_Error(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close() //nolint:errcheck
 
-	repo := NewOutboxEventRepository(db, "postgres")
+	repo := NewMySQLOutboxEventRepository(db)
 	ctx := context.Background()
 
 	uuid1 := uuid.Must(uuid.NewV7())
@@ -181,9 +161,10 @@ func TestOutboxEventRepository_Update_Error(t *testing.T) {
 		Status:    domain.OutboxEventStatusProcessed,
 	}
 
+	idBytes, _ := uuid1.MarshalBinary()
 	updateError := assert.AnError
 	mock.ExpectExec("UPDATE outbox_events").
-		WithArgs(event.EventType, event.Payload, event.Status, event.Retries, event.LastError, event.ProcessedAt, event.ID).
+		WithArgs(event.EventType, event.Payload, event.Status, event.Retries, event.LastError, event.ProcessedAt, idBytes).
 		WillReturnError(updateError)
 
 	err = repo.Update(ctx, event)

@@ -40,7 +40,7 @@ test-coverage: test ## Run tests and show coverage in browser
 
 lint: ## Run linter
 	@echo "Running linter..."
-	@golangci-lint run -v
+	@golangci-lint run -v --fix
 
 clean: ## Remove build artifacts
 	@echo "Cleaning..."

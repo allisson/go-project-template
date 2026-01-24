@@ -6,12 +6,13 @@ import (
 	"errors"
 	"testing"
 
-	outboxDomain "github.com/allisson/go-project-template/internal/outbox/domain"
-	"github.com/allisson/go-project-template/internal/user/domain"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	outboxDomain "github.com/allisson/go-project-template/internal/outbox/domain"
+	"github.com/allisson/go-project-template/internal/user/domain"
 )
 
 // MockTxManager is a mock implementation of database.TxManager
@@ -68,7 +69,10 @@ func (m *MockOutboxEventRepository) Create(ctx context.Context, event *outboxDom
 	return args.Error(0)
 }
 
-func (m *MockOutboxEventRepository) GetPendingEvents(ctx context.Context, limit int) ([]*outboxDomain.OutboxEvent, error) {
+func (m *MockOutboxEventRepository) GetPendingEvents(
+	ctx context.Context,
+	limit int,
+) ([]*outboxDomain.OutboxEvent, error) {
 	args := m.Called(ctx, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
