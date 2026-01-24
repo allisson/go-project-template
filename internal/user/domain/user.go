@@ -5,11 +5,12 @@ import (
 	"time"
 
 	"github.com/allisson/go-project-template/internal/errors"
+	"github.com/google/uuid"
 )
 
 // User represents a user in the system
 type User struct {
-	ID        int64     `db:"id"`
+	ID        uuid.UUID `db:"id"`
 	Name      string    `db:"name" fieldtag:"insert,update"`
 	Email     string    `db:"email" fieldtag:"insert,update"`
 	Password  string    `db:"password" fieldtag:"insert,update"`

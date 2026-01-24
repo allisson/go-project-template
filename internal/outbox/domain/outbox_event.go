@@ -1,7 +1,11 @@
 // Package domain defines the core outbox domain entities and types.
 package domain
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 // OutboxEventStatus represents the status of an outbox event
 type OutboxEventStatus string
@@ -14,7 +18,7 @@ const (
 
 // OutboxEvent represents an event in the transactional outbox pattern
 type OutboxEvent struct {
-	ID          int64             `db:"id" json:"id"`
+	ID          uuid.UUID         `db:"id" json:"id"`
 	EventType   string            `db:"event_type" json:"event_type" fieldtag:"insert,update"`
 	Payload     string            `db:"payload" json:"payload" fieldtag:"insert,update"`
 	Status      OutboxEventStatus `db:"status" json:"status" fieldtag:"insert,update"`

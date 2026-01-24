@@ -16,6 +16,7 @@ import (
 	userHttp "github.com/allisson/go-project-template/internal/user/http"
 	"github.com/allisson/go-project-template/internal/user/http/dto"
 	userUsecase "github.com/allisson/go-project-template/internal/user/usecase"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -42,7 +43,7 @@ func (m *MockUserUseCase) GetUserByEmail(ctx context.Context, email string) (*us
 	return args.Get(0).(*userDomain.User), args.Error(1)
 }
 
-func (m *MockUserUseCase) GetUserByID(ctx context.Context, id int64) (*userDomain.User, error) {
+func (m *MockUserUseCase) GetUserByID(ctx context.Context, id uuid.UUID) (*userDomain.User, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -246,8 +247,9 @@ func TestUserHandler_Register_Success(t *testing.T) {
 		Password: req.Password,
 	}
 
+	uuid1 := uuid.Must(uuid.NewV7())
 	expectedUser := &userDomain.User{
-		ID:    1,
+		ID:    uuid1,
 		Name:  input.Name,
 		Email: input.Email,
 	}
@@ -266,7 +268,7 @@ func TestUserHandler_Register_Success(t *testing.T) {
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.Equal(t, float64(1), response["id"])
+	assert.Equal(t, uuid1.String(), response["id"])
 	assert.Equal(t, input.Name, response["name"])
 	assert.Equal(t, input.Email, response["email"])
 

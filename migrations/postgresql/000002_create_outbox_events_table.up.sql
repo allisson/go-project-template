@@ -1,6 +1,6 @@
 -- Create outbox_events table
 CREATE TABLE IF NOT EXISTS outbox_events (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY,
     event_type VARCHAR(255) NOT NULL,
     payload TEXT NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'pending',

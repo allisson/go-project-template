@@ -9,6 +9,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	apperrors "github.com/allisson/go-project-template/internal/errors"
 	"github.com/allisson/go-project-template/internal/user/domain"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -72,8 +73,9 @@ func TestUserRepository_GetByID(t *testing.T) {
 	repo := NewUserRepository(db, "postgres")
 	ctx := context.Background()
 
+	uuid1 := uuid.Must(uuid.NewV7())
 	expectedUser := &domain.User{
-		ID:        1,
+		ID:        uuid1,
 		Name:      "John Doe",
 		Email:     "john@example.com",
 		Password:  "hashed_password",
@@ -85,10 +87,10 @@ func TestUserRepository_GetByID(t *testing.T) {
 		AddRow(expectedUser.ID, expectedUser.Name, expectedUser.Email, expectedUser.Password, expectedUser.CreatedAt, expectedUser.UpdatedAt)
 
 	mock.ExpectQuery("SELECT (.+) FROM users").
-		WithArgs(int64(1)).
+		WithArgs(uuid1).
 		WillReturnRows(rows)
 
-	user, err := repo.GetByID(ctx, 1)
+	user, err := repo.GetByID(ctx, uuid1)
 	assert.NoError(t, err)
 	assert.NotNil(t, user)
 	assert.Equal(t, expectedUser.ID, user.ID)
@@ -105,11 +107,12 @@ func TestUserRepository_GetByID_NotFound(t *testing.T) {
 	repo := NewUserRepository(db, "postgres")
 	ctx := context.Background()
 
+	notFoundUUID := uuid.Must(uuid.NewV7())
 	mock.ExpectQuery("SELECT (.+) FROM users").
-		WithArgs(int64(999)).
+		WithArgs(notFoundUUID).
 		WillReturnError(sql.ErrNoRows)
 
-	user, err := repo.GetByID(ctx, 999)
+	user, err := repo.GetByID(ctx, notFoundUUID)
 	assert.Error(t, err)
 	assert.Nil(t, user)
 	assert.True(t, apperrors.Is(err, domain.ErrUserNotFound))
@@ -124,8 +127,9 @@ func TestUserRepository_GetByEmail(t *testing.T) {
 	repo := NewUserRepository(db, "postgres")
 	ctx := context.Background()
 
+	uuid1 := uuid.Must(uuid.NewV7())
 	expectedUser := &domain.User{
-		ID:        1,
+		ID:        uuid1,
 		Name:      "John Doe",
 		Email:     "john@example.com",
 		Password:  "hashed_password",

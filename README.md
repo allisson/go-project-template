@@ -10,6 +10,7 @@ A production-ready Go project template following Clean Architecture and Domain-D
 - **Dependency Injection Container** - Centralized component wiring with lazy initialization and clean resource management
 - **Multiple Database Support** - PostgreSQL and MySQL via unified repository layer
 - **Database Migrations** - Separate migrations for PostgreSQL and MySQL using golang-migrate
+- **UUIDv7 Primary Keys** - Time-ordered, sortable UUIDs for globally unique identifiers
 - **Transaction Management** - TxManager interface for handling database transactions
 - **Transactional Outbox Pattern** - Event-driven architecture with guaranteed delivery
 - **HTTP Server** - Standard library HTTP server with middleware for logging and panic recovery
@@ -171,6 +172,68 @@ formatters:
 ```
 
 This ensures the linter correctly groups your local imports.
+
+### UUIDv7 Primary Keys
+
+The project uses **UUIDv7** for all primary keys instead of auto-incrementing integers. UUIDv7 provides several advantages:
+
+**Benefits:**
+- **Time-ordered**: UUIDs include timestamp information, maintaining temporal ordering
+- **Globally unique**: No collision risk across distributed systems or databases
+- **Database friendly**: Better index performance than random UUIDs (v4) due to sequential nature
+- **Scalability**: No need for centralized ID generation or coordination
+- **Merge-friendly**: Databases can be merged without ID conflicts
+
+**Implementation:**
+
+All ID fields use `uuid.UUID` type from `github.com/google/uuid`:
+
+```go
+import "github.com/google/uuid"
+
+type User struct {
+    ID        uuid.UUID `db:"id" json:"id"`
+    Name      string    `db:"name"`
+    Email     string    `db:"email"`
+    CreatedAt time.Time `db:"created_at"`
+    UpdatedAt time.Time `db:"updated_at"`
+}
+```
+
+IDs are generated in the application code using `uuid.NewV7()`:
+
+```go
+user := &domain.User{
+    ID:       uuid.Must(uuid.NewV7()),
+    Name:     input.Name,
+    Email:    input.Email,
+    Password: hashedPassword,
+}
+```
+
+**Database Storage:**
+- **PostgreSQL**: `UUID` type (native support)
+- **MySQL**: `BINARY(16)` type (16-byte storage)
+
+**Migration Example (PostgreSQL):**
+```sql
+CREATE TABLE users (
+    id UUID PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**Migration Example (MySQL):**
+```sql
+CREATE TABLE users (
+    id BINARY(16) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
 
 ### 3. Install dependencies
 
@@ -576,10 +639,11 @@ package domain
 import (
     "time"
     apperrors "github.com/yourname/yourproject/internal/errors"
+    "github.com/google/uuid"
 )
 
 type Product struct {
-    ID          int64
+    ID          uuid.UUID
     Name        string
     Price       float64
     Stock       int
@@ -725,7 +789,7 @@ func (r *RegisterUserRequest) Validate() error {
 
 // Response DTO
 type UserResponse struct {
-    ID        int64     `json:"id"`
+    ID        uuid.UUID `json:"id"`
     Name      string    `json:"name"`
     Email     string    `json:"email"`
     CreatedAt time.Time `json:"created_at"`
@@ -977,6 +1041,7 @@ go tool cover -html=coverage.out
 - [go-pwdhash](https://github.com/allisson/go-pwdhash) - Password hashing with Argon2id
 - [sqlutil](https://github.com/allisson/sqlutil) - SQL utilities for unified database access
 - [validation](https://github.com/jellydator/validation) - Advanced input validation library
+- [uuid](https://github.com/google/uuid) - UUID generation including UUIDv7 support
 - [urfave/cli](https://github.com/urfave/cli) - CLI framework
 - [golang-migrate](https://github.com/golang-migrate/migrate) - Database migrations
 

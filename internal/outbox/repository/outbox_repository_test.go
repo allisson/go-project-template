@@ -7,6 +7,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/allisson/go-project-template/internal/outbox/domain"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -72,9 +73,11 @@ func TestOutboxEventRepository_GetPendingEvents(t *testing.T) {
 	ctx := context.Background()
 
 	now := time.Now()
+	uuid1 := uuid.Must(uuid.NewV7())
+	uuid2 := uuid.Must(uuid.NewV7())
 	expectedEvents := []*domain.OutboxEvent{
 		{
-			ID:        1,
+			ID:        uuid1,
 			EventType: "user.created",
 			Payload:   `{"id": 1}`,
 			Status:    domain.OutboxEventStatusPending,
@@ -83,7 +86,7 @@ func TestOutboxEventRepository_GetPendingEvents(t *testing.T) {
 			UpdatedAt: now,
 		},
 		{
-			ID:        2,
+			ID:        uuid2,
 			EventType: "user.created",
 			Payload:   `{"id": 2}`,
 			Status:    domain.OutboxEventStatusPending,
@@ -141,8 +144,9 @@ func TestOutboxEventRepository_Update(t *testing.T) {
 	ctx := context.Background()
 
 	now := time.Now()
+	uuid1 := uuid.Must(uuid.NewV7())
 	event := &domain.OutboxEvent{
-		ID:          1,
+		ID:          uuid1,
 		EventType:   "user.created",
 		Payload:     `{"id": 1}`,
 		Status:      domain.OutboxEventStatusProcessed,
@@ -169,8 +173,9 @@ func TestOutboxEventRepository_Update_Error(t *testing.T) {
 	repo := NewOutboxEventRepository(db, "postgres")
 	ctx := context.Background()
 
+	uuid1 := uuid.Must(uuid.NewV7())
 	event := &domain.OutboxEvent{
-		ID:        999,
+		ID:        uuid1,
 		EventType: "user.created",
 		Payload:   `{"id": 1}`,
 		Status:    domain.OutboxEventStatusProcessed,

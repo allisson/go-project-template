@@ -10,6 +10,7 @@ import (
 	"github.com/allisson/go-project-template/internal/database"
 	"github.com/allisson/go-project-template/internal/user/domain"
 	"github.com/allisson/sqlutil"
+	"github.com/google/uuid"
 
 	apperrors "github.com/allisson/go-project-template/internal/errors"
 )
@@ -46,7 +47,7 @@ func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
 }
 
 // GetByID retrieves a user by ID
-func (r *UserRepository) GetByID(ctx context.Context, id int64) (*domain.User, error) {
+func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
 	var user domain.User
 	opts := sqlutil.NewFindOptions(r.flavor).WithFilter("id", id)
 	querier := database.GetTx(ctx, r.db)

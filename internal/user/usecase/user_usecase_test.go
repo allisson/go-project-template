@@ -8,6 +8,7 @@ import (
 
 	outboxDomain "github.com/allisson/go-project-template/internal/outbox/domain"
 	"github.com/allisson/go-project-template/internal/user/domain"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -36,12 +37,12 @@ func (m *MockUserRepository) Create(ctx context.Context, user *domain.User) erro
 	args := m.Called(ctx, user)
 	if args.Get(0) != nil {
 		// Set the ID to simulate database behavior
-		user.ID = 1
+		user.ID = uuid.Must(uuid.NewV7())
 	}
 	return args.Error(0)
 }
 
-func (m *MockUserRepository) GetByID(ctx context.Context, id int64) (*domain.User, error) {
+func (m *MockUserRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -247,8 +248,9 @@ func TestUserUseCase_GetUserByEmail_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
+	uuid1 := uuid.New()
 	expectedUser := &domain.User{
-		ID:    1,
+		ID:    uuid1,
 		Name:  "John Doe",
 		Email: "john@example.com",
 	}
@@ -296,15 +298,16 @@ func TestUserUseCase_GetUserByID_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
+	uuid1 := uuid.Must(uuid.NewV7())
 	expectedUser := &domain.User{
-		ID:    1,
+		ID:    uuid1,
 		Name:  "John Doe",
 		Email: "john@example.com",
 	}
 
-	userRepo.On("GetByID", ctx, int64(1)).Return(expectedUser, nil)
+	userRepo.On("GetByID", ctx, uuid1).Return(expectedUser, nil)
 
-	user, err := useCase.GetUserByID(ctx, 1)
+	user, err := useCase.GetUserByID(ctx, uuid1)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, user)
@@ -324,10 +327,11 @@ func TestUserUseCase_GetUserByID_NotFound(t *testing.T) {
 
 	ctx := context.Background()
 	notFoundError := errors.New("user not found")
+	notFoundUUID := uuid.Must(uuid.NewV7())
 
-	userRepo.On("GetByID", ctx, int64(999)).Return(nil, notFoundError)
+	userRepo.On("GetByID", ctx, notFoundUUID).Return(nil, notFoundError)
 
-	user, err := useCase.GetUserByID(ctx, 999)
+	user, err := useCase.GetUserByID(ctx, notFoundUUID)
 
 	assert.Error(t, err)
 	assert.Nil(t, user)
