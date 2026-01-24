@@ -82,7 +82,7 @@ go-project-template/
 The project follows a modular domain architecture where each business domain is organized in its own directory with clear separation of concerns:
 
 - **`domain/`** - Contains entities, value objects, and domain types (pure internal representation)
-- **`usecase/`** - Implements business logic and orchestrates operations
+- **`usecase/`** - Defines UseCase interfaces and implements business logic and orchestration
 - **`repository/`** - Handles data persistence and retrieval
 - **`http/`** - Contains HTTP handlers and DTOs (Data Transfer Objects)
   - **`dto/`** - Request/response DTOs and mappers (API contracts)
@@ -380,7 +380,7 @@ The project follows a modular domain-driven structure where each business domain
 
 **User Domain** (`internal/user/`)
 - `domain/` - User entity and types
-- `usecase/` - User registration, authentication logic
+- `usecase/` - UseCase interface and user business logic implementation
 - `repository/` - User data persistence
 - `http/` - User HTTP endpoints and handlers
   - `dto/` - Request/response DTOs and mappers
@@ -414,17 +414,17 @@ To add a new domain (e.g., `product`):
 ```
 internal/product/
 ├── domain/
-│   └── product.go           # Domain entity (no JSON tags)
+│   └── product.go              # Domain entity (no JSON tags)
 ├── usecase/
-│   └── product_usecase.go   # Business logic
+│   └── product_usecase.go      # UseCase interface + business logic
 ├── repository/
-│   └── product_repository.go # Data access
+│   └── product_repository.go   # Data access
 └── http/
     ├── dto/
-    │   ├── request.go       # API request DTOs
-    │   ├── response.go      # API response DTOs
-    │   └── mapper.go        # DTO-to-domain mappers
-    └── product_handler.go   # HTTP handlers
+    │   ├── request.go          # API request DTOs
+    │   ├── response.go         # API response DTOs
+    │   └── mapper.go           # DTO-to-domain mappers
+    └── product_handler.go      # HTTP handlers
 ```
 
 #### 2. Register in DI container
@@ -435,9 +435,9 @@ Add the new domain to the dependency injection container (`internal/app/di.go`):
 // Add fields to Container struct
 type Container struct {
     // ... existing fields
-    productRepo     *productRepository.ProductRepository
-    productUseCase  *productUsecase.ProductUseCase
-    productRepoInit sync.Once
+    productRepo        *productRepository.ProductRepository
+    productUseCase     productUsecase.UseCase  // Interface, not concrete type
+    productRepoInit    sync.Once
     productUseCaseInit sync.Once
 }
 
@@ -454,6 +454,18 @@ func (c *Container) ProductRepository() (*productRepository.ProductRepository, e
     return c.productRepo, nil
 }
 
+func (c *Container) ProductUseCase() (productUsecase.UseCase, error) {
+    var err error
+    c.productUseCaseInit.Do(func() {
+        c.productUseCase, err = c.initProductUseCase()
+        if err != nil {
+            c.initErrors["productUseCase"] = err
+        }
+    })
+    // ... error handling
+    return c.productUseCase, nil
+}
+
 // Add initialization methods
 func (c *Container) initProductRepository() (*productRepository.ProductRepository, error) {
     db, err := c.DB()
@@ -461,6 +473,20 @@ func (c *Container) initProductRepository() (*productRepository.ProductRepositor
         return nil, fmt.Errorf("failed to get database: %w", err)
     }
     return productRepository.NewProductRepository(db, c.config.DBDriver), nil
+}
+
+func (c *Container) initProductUseCase() (productUsecase.UseCase, error) {
+    txManager, err := c.TxManager()
+    if err != nil {
+        return nil, fmt.Errorf("failed to get tx manager: %w", err)
+    }
+    
+    productRepo, err := c.ProductRepository()
+    if err != nil {
+        return nil, fmt.Errorf("failed to get product repository: %w", err)
+    }
+    
+    return productUsecase.NewProductUseCase(txManager, productRepo)
 }
 ```
 
@@ -474,19 +500,23 @@ mux.HandleFunc("/api/products", productHandler.HandleProducts)
 ```
 
 **Tips:**
+- Define a UseCase interface in your usecase package to enable dependency inversion
 - Use the shared `httputil.MakeJSONResponse` function in your HTTP handlers for consistent JSON responses
 - Keep domain models free of JSON tags - use DTOs for API serialization
 - Implement validation in your request DTOs
 - Create mapper functions to convert between DTOs and domain models
 - Register all components in the DI container for proper lifecycle management
+- HTTP handlers should depend on the UseCase interface, not concrete implementations
 
 ### Clean Architecture Layers
 
 1. **Domain Layer** - Contains business entities and rules (e.g., `internal/user/domain`)
 2. **Repository Layer** - Data access implementations using sqlutil (e.g., `internal/user/repository`)
-3. **Use Case Layer** - Application business logic (e.g., `internal/user/usecase`)
+3. **Use Case Layer** - UseCase interfaces and application business logic (e.g., `internal/user/usecase`)
 4. **Presentation Layer** - HTTP handlers and server (e.g., `internal/user/http`)
 5. **Utility Layer** - Shared utilities and helpers (e.g., `internal/httputil`)
+
+**Dependency Inversion Principle:** The presentation layer (HTTP handlers) and infrastructure (DI container) depend on UseCase interfaces defined in the usecase layer, not on concrete implementations. This enables better testability and decoupling.
 
 ### Data Transfer Objects (DTOs)
 
