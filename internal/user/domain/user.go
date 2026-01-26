@@ -11,12 +11,12 @@ import (
 
 // User represents a user in the system
 type User struct {
-	ID        uuid.UUID `db:"id"`
-	Name      string    `db:"name"       fieldtag:"insert,update"`
-	Email     string    `db:"email"      fieldtag:"insert,update"`
-	Password  string    `db:"password"   fieldtag:"insert,update"`
-	CreatedAt time.Time `db:"created_at"`
-	UpdatedAt time.Time `db:"updated_at"`
+	ID        uuid.UUID
+	Name      string
+	Email     string
+	Password  string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // Domain-specific errors for user operations.
