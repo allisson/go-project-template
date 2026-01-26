@@ -156,7 +156,7 @@ func runMigrations() error {
 	return nil
 }
 
-// runWorker starts the event worker with graceful shutdown support.
+// runWorker starts the outbox event processor with graceful shutdown support.
 func runWorker(ctx context.Context) error {
 	// Load configuration
 	cfg := config.Load()
@@ -166,21 +166,21 @@ func runWorker(ctx context.Context) error {
 
 	// Get logger from container
 	logger := container.Logger()
-	logger.Info("starting worker", slog.String("version", "1.0.0"))
+	logger.Info("starting outbox event processor", slog.String("version", "1.0.0"))
 
 	// Ensure cleanup on exit
 	defer closeContainer(container, logger)
 
-	// Get event worker from container (this initializes all dependencies)
-	eventWorker, err := container.EventWorker()
+	// Get outbox use case from container (this initializes all dependencies)
+	outboxUseCase, err := container.OutboxUseCase()
 	if err != nil {
-		return fmt.Errorf("failed to initialize event worker: %w", err)
+		return fmt.Errorf("failed to initialize outbox use case: %w", err)
 	}
 
 	// Setup graceful shutdown
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	// Start worker
-	return eventWorker.Start(ctx)
+	// Start outbox event processor
+	return outboxUseCase.Start(ctx)
 }

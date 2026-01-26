@@ -16,7 +16,7 @@ The binary will be created at `./bin/app`.
 
 ```bash
 make run-server              # Build and run HTTP server
-make run-worker              # Build and run background worker
+make run-worker              # Build and run outbox event processor
 make run-migrate             # Build and run database migrations
 ```
 

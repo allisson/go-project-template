@@ -80,13 +80,15 @@ go-project-template/
 │   ├── httputil/               # HTTP utilities (JSON responses, error mapping)
 │   ├── validation/             # Custom validation rules
 │   ├── testutil/               # Test utilities
-│   ├── worker/                 # Background workers
 │   ├── user/                   # User domain module
 │   │   ├── domain/             # User entities and domain errors
 │   │   ├── usecase/            # User business logic
 │   │   ├── repository/         # User data access
 │   │   └── http/               # User HTTP handlers and DTOs
 │   └── outbox/                 # Outbox domain module
+│       ├── domain/             # Outbox entities and domain errors
+│       ├── usecase/            # Outbox event processing logic
+│       └── repository/         # Outbox data access
 ├── migrations/
 │   ├── postgresql/             # PostgreSQL migrations
 │   └── mysql/                  # MySQL migrations
@@ -126,7 +128,7 @@ The project uses real PostgreSQL and MySQL databases for testing instead of mock
 ```bash
 make build                    # Build the application
 make run-server              # Run HTTP server
-make run-worker              # Run background worker
+make run-worker              # Run outbox event processor
 make run-migrate             # Run database migrations
 make lint                    # Run linter with auto-fix
 make clean                   # Clean build artifacts
@@ -192,10 +194,11 @@ All entities use UUIDv7 for primary keys:
 
 ### Transactional Outbox Pattern
 
-Ensures reliable event delivery:
+Ensures reliable event delivery using a use case-based approach:
 1. Business operation and event stored in same transaction
-2. Background worker processes pending events
+2. Outbox use case processes pending events with configurable retry logic
 3. Guarantees at-least-once delivery
+4. Extensible event processing via the `EventProcessor` interface
 
 ## 🐳 Docker
 
@@ -212,6 +215,8 @@ make docker-run-worker
 # Run migrations in Docker
 make docker-run-migrate
 ```
+
+The worker command runs the outbox event processor, which handles asynchronous event processing using the transactional outbox pattern.
 
 ## 🔧 Configuration
 

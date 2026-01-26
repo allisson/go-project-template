@@ -250,8 +250,9 @@ internal/
 │       │   └── mapper.go
 │       └── user_handler.go
 ├── outbox/                     # Outbox domain module
-│   ├── domain/
-│   └── repository/
+│   ├── domain/                 # Outbox entities and domain errors
+│   ├── usecase/                # Outbox event processing logic
+│   └── repository/             # Outbox data access
 └── {new-domain}/               # Easy to add new domains
 ```
 
@@ -276,8 +277,8 @@ The DI container (`internal/app/`) manages all application components with:
 Container
 ├── Infrastructure (Database, Logger)
 ├── Repositories (User, Outbox)
-├── Use Cases (User)
-└── Presentation (HTTP Server, Worker)
+├── Use Cases (User, Outbox)
+└── Presentation (HTTP Server)
 ```
 
 **Example**:
@@ -372,17 +373,19 @@ The transaction is automatically injected into the context and used by repositor
 
 ## 📤 Transactional Outbox Pattern
 
-The project demonstrates the transactional outbox pattern for reliable event delivery:
+The project demonstrates the transactional outbox pattern for reliable event delivery using a use case-based architecture:
 
 1. 📝 Business operation (e.g., user creation) is executed
 2. 📬 Event is stored in outbox table in **same transaction**
-3. 🚀 Background worker picks up pending events
+3. 🚀 Outbox use case processes pending events with configurable retry logic
 4. ✅ Events are marked as processed or failed
+5. 🔌 Extensible via the `EventProcessor` interface for custom event handling
 
 **Benefits**:
 - 🔒 **Guaranteed delivery** - Events never lost due to transaction rollback
 - 🔁 **At-least-once delivery** - Events processed at least once
 - 🎯 **Consistency** - Business operations and events always in sync
+- 🔧 **Extensibility** - Custom event processors for different event types
 
 **Example (User Registration)**:
 ```go
@@ -403,4 +406,41 @@ err = uc.txManager.WithTx(ctx, func(ctx context.Context) error {
 })
 ```
 
-The worker (`internal/worker/event_worker.go`) processes these events asynchronously.
+**Processing Events**:
+
+The outbox use case (`internal/outbox/usecase/outbox_usecase.go`) processes these events asynchronously:
+
+```go
+// Start the outbox event processor
+outboxUseCase, err := container.OutboxUseCase()
+if err != nil {
+    return fmt.Errorf("failed to initialize outbox use case: %w", err)
+}
+
+// Processes events in background
+err = outboxUseCase.Start(ctx)
+```
+
+**Custom Event Processing**:
+
+You can create custom event processors by implementing the `EventProcessor` interface:
+
+```go
+type CustomEventProcessor struct {
+    logger *slog.Logger
+    // Add your dependencies here (e.g., message queue client)
+}
+
+func (p *CustomEventProcessor) Process(ctx context.Context, event *domain.OutboxEvent) error {
+    // Your custom event processing logic
+    switch event.EventType {
+    case "user.created":
+        // Send to message queue, send notification, etc.
+        return p.publishToQueue(ctx, event)
+    default:
+        return fmt.Errorf("unknown event type: %s", event.EventType)
+    }
+}
+```
+
+Then register it in the DI container when initializing the outbox use case.
