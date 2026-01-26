@@ -13,9 +13,9 @@ import (
 	"github.com/allisson/go-project-template/internal/database"
 	"github.com/allisson/go-project-template/internal/http"
 	outboxRepository "github.com/allisson/go-project-template/internal/outbox/repository"
+	outboxUsecase "github.com/allisson/go-project-template/internal/outbox/usecase"
 	userRepository "github.com/allisson/go-project-template/internal/user/repository"
 	userUsecase "github.com/allisson/go-project-template/internal/user/usecase"
-	"github.com/allisson/go-project-template/internal/worker"
 )
 
 // Container holds all application dependencies and provides methods to access them.
@@ -36,23 +36,23 @@ type Container struct {
 	outboxRepo userUsecase.OutboxEventRepository
 
 	// Use Cases
-	userUseCase userUsecase.UseCase
+	userUseCase   userUsecase.UseCase
+	outboxUseCase outboxUsecase.UseCase
 
 	// Servers and Workers
-	httpServer  *http.Server
-	eventWorker *worker.EventWorker
+	httpServer *http.Server
 
 	// Initialization flags and mutex for thread-safety
-	mu              sync.Mutex
-	loggerInit      sync.Once
-	dbInit          sync.Once
-	txManagerInit   sync.Once
-	userRepoInit    sync.Once
-	outboxRepoInit  sync.Once
-	userUseCaseInit sync.Once
-	httpServerInit  sync.Once
-	eventWorkerInit sync.Once
-	initErrors      map[string]error
+	mu                sync.Mutex
+	loggerInit        sync.Once
+	dbInit            sync.Once
+	txManagerInit     sync.Once
+	userRepoInit      sync.Once
+	outboxRepoInit    sync.Once
+	userUseCaseInit   sync.Once
+	outboxUseCaseInit sync.Once
+	httpServerInit    sync.Once
+	initErrors        map[string]error
 }
 
 // NewContainer creates a new dependency injection container with the provided configuration.
@@ -187,22 +187,22 @@ func (c *Container) HTTPServer() (*http.Server, error) {
 	return c.httpServer, nil
 }
 
-// EventWorker returns the event worker instance.
-func (c *Container) EventWorker() (*worker.EventWorker, error) {
+// OutboxUseCase returns the outbox use case instance.
+func (c *Container) OutboxUseCase() (outboxUsecase.UseCase, error) {
 	var err error
-	c.eventWorkerInit.Do(func() {
-		c.eventWorker, err = c.initEventWorker()
+	c.outboxUseCaseInit.Do(func() {
+		c.outboxUseCase, err = c.initOutboxUseCase()
 		if err != nil {
-			c.initErrors["eventWorker"] = err
+			c.initErrors["outboxUseCase"] = err
 		}
 	})
 	if err != nil {
 		return nil, err
 	}
-	if storedErr, exists := c.initErrors["eventWorker"]; exists {
+	if storedErr, exists := c.initErrors["outboxUseCase"]; exists {
 		return nil, storedErr
 	}
-	return c.eventWorker, nil
+	return c.outboxUseCase, nil
 }
 
 // Shutdown performs cleanup of all initialized resources.
@@ -362,28 +362,29 @@ func (c *Container) initHTTPServer() (*http.Server, error) {
 	return server, nil
 }
 
-// initEventWorker creates the event worker with all its dependencies.
-func (c *Container) initEventWorker() (*worker.EventWorker, error) {
+// initOutboxUseCase creates the outbox use case with all its dependencies.
+func (c *Container) initOutboxUseCase() (outboxUsecase.UseCase, error) {
 	logger := c.Logger()
 
 	txManager, err := c.TxManager()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get tx manager for event worker: %w", err)
+		return nil, fmt.Errorf("failed to get tx manager for outbox use case: %w", err)
 	}
 
 	outboxRepo, err := c.OutboxRepository()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get outbox repository for event worker: %w", err)
+		return nil, fmt.Errorf("failed to get outbox repository for outbox use case: %w", err)
 	}
 
-	workerConfig := worker.Config{
+	useCaseConfig := outboxUsecase.Config{
 		Interval:      c.config.WorkerInterval,
 		BatchSize:     c.config.WorkerBatchSize,
 		MaxRetries:    c.config.WorkerMaxRetries,
 		RetryInterval: c.config.WorkerRetryInterval,
 	}
 
-	eventWorker := worker.NewEventWorker(workerConfig, txManager, outboxRepo, logger)
+	eventProcessor := outboxUsecase.NewDefaultEventProcessor(logger)
+	useCase := outboxUsecase.NewOutboxUseCase(useCaseConfig, txManager, outboxRepo, eventProcessor, logger)
 
-	return eventWorker, nil
+	return useCase, nil
 }

@@ -203,13 +203,13 @@ curl http://localhost:8080/ready
 
 ### Start the Background Worker
 
-In another terminal, start the worker process:
+In another terminal, start the outbox event processor:
 
 ```bash
 make run-worker
 ```
 
-The worker processes outbox events from the database.
+The outbox event processor handles asynchronous event processing from the outbox table using the transactional outbox pattern.
 
 ## 🧪 Testing the API
 
@@ -295,6 +295,8 @@ The binary supports three commands via `urfave/cli`:
 ```bash
 ./bin/app worker
 ```
+
+This starts the outbox event processor which handles asynchronous event processing using the transactional outbox pattern.
 
 ## 📚 Next Steps
 
