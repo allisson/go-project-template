@@ -3,6 +3,7 @@ linters:
   default: standard
   enable:
     - gosec
+    - gocritic
 formatters:
   enable:
     - goimports
